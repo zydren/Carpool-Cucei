@@ -1,37 +1,78 @@
 import { useState } from 'react';
+import { Link, useLocation } from 'react-router-dom';
 
 const Navbar = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const location = useLocation();
+
+  const isActive = (path: string) => location.pathname === path;
 
   return (
     <nav className="bg-white shadow-md fixed w-full top-0 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           <div className="flex items-center">
-            <div className="flex-shrink-0">
-              <h1 className="text-2xl font-bold text-indigo-600">
+            <Link to="/" className="flex-shrink-0">
+              <h1 className="text-2xl font-bold text-indigo-600 hover:text-indigo-700 transition-colors">
                 Carpool Universitario
               </h1>
-            </div>
+            </Link>
           </div>
           
           <div className="hidden md:block">
             <div className="ml-10 flex items-baseline space-x-4">
-              <a href="#" className="text-gray-900 hover:text-indigo-600 px-3 py-2 rounded-md text-sm font-medium transition-colors">
+              <Link 
+                to="/" 
+                className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                  isActive('/') ? 'text-indigo-600 bg-indigo-50' : 'text-gray-700 hover:text-indigo-600'
+                }`}
+              >
                 Inicio
-              </a>
-              <a href="#como-funciona" className="text-gray-700 hover:text-indigo-600 px-3 py-2 rounded-md text-sm font-medium transition-colors">
+              </Link>
+              <Link 
+                to="/como-funciona" 
+                className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                  isActive('/como-funciona') ? 'text-indigo-600 bg-indigo-50' : 'text-gray-700 hover:text-indigo-600'
+                }`}
+              >
                 Cómo funciona
-              </a>
-              <a href="#beneficios" className="text-gray-700 hover:text-indigo-600 px-3 py-2 rounded-md text-sm font-medium transition-colors">
-                Beneficios
-              </a>
-              <button className="bg-indigo-600 text-white hover:bg-indigo-700 px-4 py-2 rounded-md text-sm font-medium transition-colors">
-                Iniciar sesión
-              </button>
-              <button className="bg-transparent border-2 border-indigo-600 text-indigo-600 hover:bg-indigo-50 px-4 py-2 rounded-md text-sm font-medium transition-colors">
-                Registrarse
-              </button>
+              </Link>
+              <Link 
+                to="/seguridad" 
+                className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                  isActive('/seguridad') ? 'text-indigo-600 bg-indigo-50' : 'text-gray-700 hover:text-indigo-600'
+                }`}
+              >
+                Seguridad
+              </Link>
+              <Link 
+                to="/preguntas-frecuentes" 
+                className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                  isActive('/preguntas-frecuentes') ? 'text-indigo-600 bg-indigo-50' : 'text-gray-700 hover:text-indigo-600'
+                }`}
+              >
+                FAQ
+              </Link>
+              <Link 
+                to="/contacto" 
+                className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                  isActive('/contacto') ? 'text-indigo-600 bg-indigo-50' : 'text-gray-700 hover:text-indigo-600'
+                }`}
+              >
+                Contacto
+              </Link>
+              <Link 
+                to="/buscar-viaje" 
+                className="bg-indigo-600 text-white hover:bg-indigo-700 px-4 py-2 rounded-md text-sm font-medium transition-colors"
+              >
+                Buscar viaje
+              </Link>
+              <Link 
+                to="/ofrecer-viaje" 
+                className="bg-transparent border-2 border-indigo-600 text-indigo-600 hover:bg-indigo-50 px-4 py-2 rounded-md text-sm font-medium transition-colors"
+              >
+                Ofrecer viaje
+              </Link>
             </div>
           </div>
 
@@ -55,21 +96,65 @@ const Navbar = () => {
       {isMenuOpen && (
         <div className="md:hidden bg-white border-t">
           <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3">
-            <a href="#" className="text-gray-900 hover:text-indigo-600 block px-3 py-2 rounded-md text-base font-medium">
+            <Link 
+              to="/" 
+              className={`block px-3 py-2 rounded-md text-base font-medium ${
+                isActive('/') ? 'text-indigo-600 bg-indigo-50' : 'text-gray-700 hover:text-indigo-600'
+              }`}
+              onClick={() => setIsMenuOpen(false)}
+            >
               Inicio
-            </a>
-            <a href="#como-funciona" className="text-gray-700 hover:text-indigo-600 block px-3 py-2 rounded-md text-base font-medium">
+            </Link>
+            <Link 
+              to="/como-funciona" 
+              className={`block px-3 py-2 rounded-md text-base font-medium ${
+                isActive('/como-funciona') ? 'text-indigo-600 bg-indigo-50' : 'text-gray-700 hover:text-indigo-600'
+              }`}
+              onClick={() => setIsMenuOpen(false)}
+            >
               Cómo funciona
-            </a>
-            <a href="#beneficios" className="text-gray-700 hover:text-indigo-600 block px-3 py-2 rounded-md text-base font-medium">
-              Beneficios
-            </a>
-            <button className="w-full text-left bg-indigo-600 text-white hover:bg-indigo-700 block px-3 py-2 rounded-md text-base font-medium mt-2">
-              Iniciar sesión
-            </button>
-            <button className="w-full text-left bg-transparent border-2 border-indigo-600 text-indigo-600 hover:bg-indigo-50 block px-3 py-2 rounded-md text-base font-medium mt-2">
-              Registrarse
-            </button>
+            </Link>
+            <Link 
+              to="/seguridad" 
+              className={`block px-3 py-2 rounded-md text-base font-medium ${
+                isActive('/seguridad') ? 'text-indigo-600 bg-indigo-50' : 'text-gray-700 hover:text-indigo-600'
+              }`}
+              onClick={() => setIsMenuOpen(false)}
+            >
+              Seguridad
+            </Link>
+            <Link 
+              to="/preguntas-frecuentes" 
+              className={`block px-3 py-2 rounded-md text-base font-medium ${
+                isActive('/preguntas-frecuentes') ? 'text-indigo-600 bg-indigo-50' : 'text-gray-700 hover:text-indigo-600'
+              }`}
+              onClick={() => setIsMenuOpen(false)}
+            >
+              FAQ
+            </Link>
+            <Link 
+              to="/contacto" 
+              className={`block px-3 py-2 rounded-md text-base font-medium ${
+                isActive('/contacto') ? 'text-indigo-600 bg-indigo-50' : 'text-gray-700 hover:text-indigo-600'
+              }`}
+              onClick={() => setIsMenuOpen(false)}
+            >
+              Contacto
+            </Link>
+            <Link 
+              to="/buscar-viaje" 
+              className="w-full text-left bg-indigo-600 text-white hover:bg-indigo-700 block px-3 py-2 rounded-md text-base font-medium mt-2"
+              onClick={() => setIsMenuOpen(false)}
+            >
+              Buscar viaje
+            </Link>
+            <Link 
+              to="/ofrecer-viaje" 
+              className="w-full text-left bg-transparent border-2 border-indigo-600 text-indigo-600 hover:bg-indigo-50 block px-3 py-2 rounded-md text-base font-medium mt-2"
+              onClick={() => setIsMenuOpen(false)}
+            >
+              Ofrecer viaje
+            </Link>
           </div>
         </div>
       )}
