@@ -1,11 +1,41 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import { getCurrentUser, logout } from '../services/authService';
 
 const Navbar = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [user, setUser] = useState<{ email?: string; full_name?: string } | null>(null);
   const location = useLocation();
 
+  useEffect(() => {
+    const checkUser = async () => {
+      try {
+        const currentUser = await getCurrentUser();
+        if (currentUser) {
+          setUser({
+            email: currentUser.email,
+            full_name: currentUser.user_metadata.full_name,
+          });
+        }
+      } catch (error) {
+        console.error('Error checking user:', error);
+      }
+    };
+
+    checkUser();
+  }, []);
+
   const isActive = (path: string) => location.pathname === path;
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+      setUser(null);
+      window.location.href = '/';
+    } catch (error) {
+      console.error('Error logging out:', error);
+    }
+  };
 
   return (
     <nav className="bg-white shadow-md fixed w-full top-0 z-50">
@@ -73,6 +103,37 @@ const Navbar = () => {
               >
                 Ofrecer viaje
               </Link>
+              
+              {user ? (
+                <>
+                  <div className="ml-4 flex items-center space-x-3">
+                    <span className="text-sm text-gray-700">
+                      Hola, {user.full_name || user.email}
+                    </span>
+                    <button
+                      onClick={handleLogout}
+                      className="text-sm text-gray-600 hover:text-indigo-600 font-medium"
+                    >
+                      Cerrar sesión
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <Link 
+                    to="/login" 
+                    className="text-sm text-gray-700 hover:text-indigo-600 font-medium transition-colors"
+                  >
+                    Iniciar sesión
+                  </Link>
+                  <Link 
+                    to="/registro" 
+                    className="bg-indigo-600 text-white hover:bg-indigo-700 px-4 py-2 rounded-md text-sm font-medium transition-colors"
+                  >
+                    Registrarse
+                  </Link>
+                </>
+              )}
             </div>
           </div>
 
@@ -155,6 +216,42 @@ const Navbar = () => {
             >
               Ofrecer viaje
             </Link>
+            
+            {user ? (
+              <>
+                <div className="mt-4 pt-4 border-t">
+                  <p className="text-sm text-gray-700 mb-2">
+                    Hola, {user.full_name || user.email}
+                  </p>
+                  <button
+                    onClick={() => {
+                      handleLogout();
+                      setIsMenuOpen(false);
+                    }}
+                    className="w-full text-left text-sm text-gray-600 hover:text-indigo-600 font-medium"
+                  >
+                    Cerrar sesión
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <Link 
+                  to="/login" 
+                  className="w-full text-left text-sm text-gray-700 hover:text-indigo-600 font-medium mt-2"
+                  onClick={() => setIsMenuOpen(false)}
+                >
+                  Iniciar sesión
+                </Link>
+                <Link 
+                  to="/registro" 
+                  className="w-full text-left bg-indigo-600 text-white hover:bg-indigo-700 block px-3 py-2 rounded-md text-base font-medium mt-2"
+                  onClick={() => setIsMenuOpen(false)}
+                >
+                  Registrarse
+                </Link>
+              </>
+            )}
           </div>
         </div>
       )}
