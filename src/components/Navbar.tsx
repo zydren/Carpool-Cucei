@@ -103,6 +103,26 @@ const Navbar = () => {
               >
                 Ofrecer viaje
               </Link>
+              {user && (
+                <Link 
+                  to="/mis-viajes" 
+                  className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                    isActive('/mis-viajes') ? 'text-indigo-600 bg-indigo-50' : 'text-gray-700 hover:text-indigo-600'
+                  }`}
+                >
+                  Mis viajes
+                </Link>
+              )}
+              {user && (
+                <Link
+                  to="/registrar-auto"
+                  className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                    isActive('/registrar-auto') ? 'text-indigo-600 bg-indigo-50' : 'text-gray-700 hover:text-indigo-600'
+                  }`}
+                >
+                  Mi auto
+                </Link>
+              )}
               
               {user ? (
                 <>
@@ -216,6 +236,28 @@ const Navbar = () => {
             >
               Ofrecer viaje
             </Link>
+            {user && (
+              <Link 
+                to="/mis-viajes" 
+                className={`w-full text-left block px-3 py-2 rounded-md text-base font-medium ${
+                  isActive('/mis-viajes') ? 'text-indigo-600 bg-indigo-50' : 'text-gray-700 hover:text-indigo-600'
+                }`}
+                onClick={() => setIsMenuOpen(false)}
+              >
+                Mis viajes
+              </Link>
+            )}
+            {user && (
+              <Link
+                to="/registrar-auto"
+                className={`w-full text-left block px-3 py-2 rounded-md text-base font-medium ${
+                  isActive('/registrar-auto') ? 'text-indigo-600 bg-indigo-50' : 'text-gray-700 hover:text-indigo-600'
+                }`}
+                onClick={() => setIsMenuOpen(false)}
+              >
+                Mi auto
+              </Link>
+            )}
             
             {user ? (
               <>

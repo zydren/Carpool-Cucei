@@ -6,6 +6,7 @@ import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import { FormField } from '../components/ui/FormField';
 import { register, type RegisterParams } from '../services/authService';
+import { ArrowLeft } from 'lucide-react';
 
 const RegisterPage = () => {
   const navigate = useNavigate();
@@ -94,13 +95,10 @@ const RegisterPage = () => {
           navigate('/login');
         }, 3000);
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Registration error:', error);
-      if (error.message) {
-        setErrors({ general: error.message });
-      } else {
-        setErrors({ general: 'Error al registrar. Por favor intenta nuevamente.' });
-      }
+      const message = error instanceof Error ? error.message : null;
+      setErrors({ general: message || 'Error al registrar. Por favor intenta nuevamente.' });
     } finally {
       setIsLoading(false);
     }
@@ -228,8 +226,9 @@ const RegisterPage = () => {
           </Card>
 
           <div className="mt-6 text-center">
-            <Link to="/" className="text-gray-600 hover:text-gray-700 text-sm">
-              ← Volver al inicio
+            <Link to="/" className="inline-flex items-center gap-1.5 text-gray-600 hover:text-gray-700 text-sm">
+              <ArrowLeft className="w-4 h-4" aria-hidden="true" />
+              Volver al inicio
             </Link>
           </div>
         </div>

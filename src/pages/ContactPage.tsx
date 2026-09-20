@@ -4,6 +4,7 @@ import Footer from '../components/Footer';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import { FormField, TextAreaField } from '../components/ui/FormField';
+import { submitContactMessage } from '../services/contactService';
 
 const ContactPage = () => {
   const [formData, setFormData] = useState({
@@ -13,7 +14,8 @@ const ContactPage = () => {
     message: '',
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [isSubmitted, setIsSubmitted] = useState(false);
+  const [submitStatus, setSubmitStatus] = useState<'idle' | 'sending' | 'success'>('idle');
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
@@ -42,16 +44,33 @@ const ContactPage = () => {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (validateForm()) {
-      setIsSubmitted(true);
-      // Simulación de envío
-      setTimeout(() => {
-        setIsSubmitted(false);
-        setFormData({ name: '', email: '', subject: '', message: '' });
-      }, 3000);
+
+    // Evita el doble envío mientras la petición está procesándose
+    if (submitStatus === 'sending') return;
+
+    setSubmitError(null);
+
+    if (!validateForm()) {
+      return;
+    }
+
+    setSubmitStatus('sending');
+
+    try {
+      await submitContactMessage(formData);
+      setSubmitStatus('success');
+      setFormData({ name: '', email: '', subject: '', message: '' });
+      setErrors({});
+    } catch (error) {
+      console.error('Error enviando mensaje de contacto:', error);
+      setSubmitStatus('idle');
+      setSubmitError(
+        error instanceof Error
+          ? error.message
+          : 'No se pudo enviar el mensaje. Intenta nuevamente.'
+      );
     }
   };
 
@@ -161,7 +180,7 @@ const ContactPage = () => {
               <Card className="p-8">
                 <h2 className="text-2xl font-bold text-gray-900 mb-6">Envíanos un Mensaje</h2>
                 
-                {isSubmitted ? (
+                {submitStatus === 'success' ? (
                   <div className="bg-green-50 border border-green-200 rounded-lg p-6 text-center">
                     <svg className="w-16 h-16 text-green-500 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -170,6 +189,14 @@ const ContactPage = () => {
                     <p className="text-green-700">
                       Gracias por contactarnos. Hemos recibido tu mensaje y te responderemos lo antes posible.
                     </p>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="mt-4"
+                      onClick={() => setSubmitStatus('idle')}
+                    >
+                      Enviar otro mensaje
+                    </Button>
                   </div>
                 ) : (
                   <form onSubmit={handleSubmit}>
@@ -211,14 +238,21 @@ const ContactPage = () => {
                       rows={6}
                     />
 
+                    {submitError && (
+                      <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+                        <p className="text-sm text-red-700">{submitError}</p>
+                      </div>
+                    )}
+
                     <Button
                       type="submit"
                       variant="primary"
                       size="lg"
                       fullWidth
+                      disabled={submitStatus === 'sending'}
                       className="mt-4"
                     >
-                      Enviar Mensaje
+                      {submitStatus === 'sending' ? 'Enviando...' : 'Enviar Mensaje'}
                     </Button>
                   </form>
                 )}

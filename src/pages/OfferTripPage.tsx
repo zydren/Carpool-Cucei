@@ -9,9 +9,11 @@ import { getCurrentUser } from '../services/authService';
 import { searchAddress, type GeocodingResult } from '../services/geocodingService';
 import { calculateRoute, formatDistance, formatDuration, type RouteResult } from '../services/routingService';
 import { createTrip, type CreateTripParams } from '../services/tripService';
+import { getMyCars } from '../services/carService';
 import { MapContainer, TileLayer, Marker, Polyline, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import { Car, Clock, Ruler } from 'lucide-react';
 
 // Coordenadas de CUCEI (Centro Universitario de Ciencias Exactas e Ingenierías)
 const CUCEI_COORDS = {
@@ -55,6 +57,7 @@ const OfferTripPage = () => {
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [hasRegisteredCar, setHasRegisteredCar] = useState(false);
 
   // Estados para geocodificación y ruta
   const [addressQuery, setAddressQuery] = useState('');
@@ -72,6 +75,14 @@ const OfferTripPage = () => {
         const currentUser = await getCurrentUser();
         if (!currentUser) {
           navigate('/login');
+        } else {
+          try {
+            const userCars = await getMyCars();
+            setHasRegisteredCar(userCars.length > 0);
+          } catch (carError) {
+            console.error('Error cargando autos:', carError);
+            setHasRegisteredCar(false);
+          }
         }
       } catch (error) {
         console.error('Error checking auth:', error);
@@ -100,9 +111,10 @@ const OfferTripPage = () => {
     try {
       const results = await searchAddress(addressQuery);
       setAddressResults(results);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error searching address:', error);
-      setErrors({ origin: error.message || 'No encontramos esa dirección. Intenta escribirla de otra manera.' });
+      const message = error instanceof Error ? error.message : null;
+      setErrors({ origin: message || 'No encontramos esa dirección. Intenta escribirla de otra manera.' });
     } finally {
       setIsSearchingAddress(false);
     }
@@ -125,7 +137,7 @@ const OfferTripPage = () => {
         CUCEI_COORDS.lat
       );
       setRouteResult(route);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error calculating route:', error);
       setRouteError('No pudimos calcular una ruta desde esa ubicación hasta CUCEI. Selecciona otra dirección.');
       setRouteResult(null);
@@ -189,6 +201,11 @@ const OfferTripPage = () => {
       return;
     }
 
+    if (!hasRegisteredCar) {
+      setErrors({ general: 'Debes registrar un auto antes de ofrecer un viaje.' });
+      return;
+    }
+
     if (!selectedOrigin || !routeResult) {
       return;
     }
@@ -230,9 +247,10 @@ const OfferTripPage = () => {
         setIsSubmitted(false);
         navigate('/');
       }, 3000);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error creating trip:', error);
-      setErrors({ general: error.message || 'Error al publicar el viaje. Intenta nuevamente.' });
+      const message = error instanceof Error ? error.message : null;
+      setErrors({ general: message || 'Error al publicar el viaje. Intenta nuevamente.' });
       setIsSubmitted(false);
     }
   };
@@ -338,6 +356,8 @@ const OfferTripPage = () => {
             {/* Formulario principal */}
             <div className="lg:col-span-2">
               <Card className="p-8">
+                {hasRegisteredCar ? (
+                  <>
                 <h2 className="text-2xl font-bold text-gray-900 mb-6">Detalles del Viaje</h2>
 
                 {isSubmitted ? (
@@ -448,11 +468,17 @@ const OfferTripPage = () => {
                           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                             <div className="flex items-center justify-around">
                               <div className="text-center">
-                                <p className="text-sm text-blue-600 font-medium">📍 Distancia</p>
+                                <p className="text-sm text-blue-600 font-medium inline-flex items-center gap-1.5">
+  <Ruler className="w-4 h-4 shrink-0" aria-hidden="true" />
+  Distancia
+</p>
                                 <p className="text-lg font-bold text-blue-800">{formatDistance(routeResult.distance)}</p>
                               </div>
                               <div className="text-center">
-                                <p className="text-sm text-blue-600 font-medium">🚗 Tiempo estimado</p>
+                                <p className="text-sm text-blue-600 font-medium inline-flex items-center gap-1.5">
+  <Clock className="w-4 h-4 shrink-0" aria-hidden="true" />
+  Tiempo estimado
+</p>
                                 <p className="text-lg font-bold text-blue-800">{formatDuration(routeResult.duration)}</p>
                               </div>
                             </div>
@@ -557,6 +583,25 @@ const OfferTripPage = () => {
                       Publicar Viaje
                     </Button>
                   </form>
+                  )}
+                  </>
+                ) : (
+                  <div className="text-center py-12">
+                    <Car className="w-12 h-12 mx-auto mb-4 text-indigo-500" aria-hidden="true" />
+                    <h2 className="text-2xl font-bold text-gray-900 mb-2">
+                      Necesitas registrar tu auto
+                    </h2>
+                    <p className="text-gray-600 mb-2">
+                      Para ofrecer un viaje debes tener un auto registrado con los datos de tu seguro.
+                    </p>
+                    <Button
+                      variant="primary"
+                      size="lg"
+                      onClick={() => navigate('/registrar-auto')}
+                    >
+                      Registrar mi auto
+                    </Button>
+                  </div>
                 )}
               </Card>
             </div>

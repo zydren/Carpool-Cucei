@@ -24,7 +24,7 @@ const SupabaseTestPage = () => {
           'mensajes'
         ];
 
-        let foundTables = [];
+        const foundTables: string[] = [];
         let connectionWorking = false;
 
         // Intentar consultar cada tabla común
@@ -39,7 +39,7 @@ const SupabaseTestPage = () => {
               foundTables.push(tableName);
               connectionWorking = true;
             }
-          } catch (err) {
+          } catch {
             // Tabla no encontrada, continuar con la siguiente
           }
         }

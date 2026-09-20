@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import Card from '../components/ui/Card';
@@ -118,9 +119,12 @@ const FAQPage = () => {
               <p className="text-gray-600 mb-4">
                 Estamos aquí para ayudarte. Contáctanos directamente.
               </p>
-              <button className="bg-indigo-600 text-white hover:bg-indigo-700 font-medium py-2 px-6 rounded-lg transition-colors">
+              <Link
+                to="/contacto"
+                className="inline-block bg-indigo-600 text-white hover:bg-indigo-700 font-medium py-2 px-6 rounded-lg transition-colors"
+              >
                 Ir a Contacto
-              </button>
+              </Link>
             </Card>
           </div>
         </div>

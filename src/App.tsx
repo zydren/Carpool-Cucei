@@ -7,9 +7,13 @@ import ContactPage from './pages/ContactPage';
 import NotFoundPage from './pages/NotFoundPage';
 import SearchTripPage from './pages/SearchTripPage';
 import OfferTripPage from './pages/OfferTripPage';
+import MyTripsPage from './pages/MyTripsPage';
+import CarRegistrationPage from './pages/CarRegistrationPage';
 import SupabaseTestPage from './pages/SupabaseTestPage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
+import ResetPasswordPage from './pages/ResetPasswordPage';
+import TripDetailPage from './pages/TripDetailPage';
 
 function App() {
   return (
@@ -22,9 +26,13 @@ function App() {
         <Route path="/contacto" element={<ContactPage />} />
         <Route path="/buscar-viaje" element={<SearchTripPage />} />
         <Route path="/ofrecer-viaje" element={<OfferTripPage />} />
+        <Route path="/mis-viajes" element={<MyTripsPage />} />
+        <Route path="/mis-viajes/:tripId" element={<TripDetailPage />} />
+        <Route path="/registrar-auto" element={<CarRegistrationPage />} />
         <Route path="/test-supabase" element={<SupabaseTestPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/registro" element={<RegisterPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
     </BrowserRouter>
