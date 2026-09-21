@@ -1,0 +1,9 @@
+﻿if (tripHasCoords && hasSearchPoint) {
+      distanceToOriginKm = haversineDistanceKm(
+        {
+          lat: params.originLatitude as number,
+          lng: params.originLongitude as number,
+        },
+        { lat: trip.originLat as number, lng: trip.originLng as number }
+      );
+    }

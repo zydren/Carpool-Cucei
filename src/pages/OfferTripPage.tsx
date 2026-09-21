@@ -8,6 +8,7 @@ import { FormField, TextAreaField } from '../components/ui/FormField';
 import { getCurrentUser } from '../services/authService';
 import { searchAddress, type GeocodingResult } from '../services/geocodingService';
 import { calculateRoute, formatDistance, formatDuration, type RouteResult } from '../services/routingService';
+import type { LineStringGeometry } from '../services/routingService';
 import { createTrip, type CreateTripParams } from '../services/tripService';
 import { getMyCars } from '../services/carService';
 import { MapContainer, TileLayer, Marker, Polyline, useMap } from 'react-leaflet';
@@ -213,13 +214,16 @@ const OfferTripPage = () => {
     setIsSubmitted(true);
 
     try {
-      const params: CreateTripParams = {
+    const params: CreateTripParams = {
         origin: selectedOrigin.display_name,
         destination: CUCEI_COORDS.address,
         origin_lat: parseFloat(selectedOrigin.lat),
         origin_lng: parseFloat(selectedOrigin.lon),
         route_distance_km: routeResult.distance / 1000,
         route_duration_minutes: Math.round(routeResult.duration / 60),
+        /** Geometría GeoJSON LineString guardada para la fase futura de
+          * "viajes cuya ruta pasa cerca". */
+        route_geometry: routeResult.geometry as LineStringGeometry,
         date: formData.date,
         time: formData.time,
         seats_available: parseInt(formData.seatsAvailable),

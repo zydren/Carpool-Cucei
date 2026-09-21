@@ -1,0 +1,1 @@
+﻿$lines = [IO.File]::ReadAllLines("src\\services\\tripService.ts", [Text.Encoding]::UTF8)Write-Output ("TOTAL_LINES=" + $lines.Length)1..100 | ForEach-Object { Write-Output ($_.ToString() + ":" + $lines[$_-1]) }Write-Output "--- 180-195 ---"180..196 | ForEach-Object { Write-Output ($_.ToString() + ":" + $lines[$_-1]) }

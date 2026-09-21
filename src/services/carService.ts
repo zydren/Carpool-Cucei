@@ -49,9 +49,18 @@ export const getMyCars = async (): Promise<Car[]> => {
 
 /** Registra un auto nuevo para el usuario autenticado. */
 export const createCar = async (params: CreateCarParams): Promise<Car> => {
+  const { data: { user }, error: userError } = await supabase.auth.getUser();
+
+  if (userError || !user) {
+    throw new Error('Usuario no autenticado');
+  }
+
   const { data, error } = await supabase
     .from('cars')
-    .insert(params)
+    .insert({
+      ...params,
+      owner_id: user.id,
+    })
     .select()
     .single();
 

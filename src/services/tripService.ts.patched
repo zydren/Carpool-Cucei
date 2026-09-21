@@ -1,4 +1,4 @@
-﻿import { supabase } from '../lib/supabase';
+import { supabase } from '../lib/supabase';
 import type { LineStringGeometry } from '../services/routingService';
 
 
@@ -65,33 +65,24 @@ export interface Trip {
  * - 'routeNearby': la ruta (route_geometry) del viaje pasa dentro del radio de
  *   búsqueda del punto indicado por el pasajero (CO no hace llamadas OSRM aquí;
  *   la distancia se calcula localmente a partir de los segmentos del LineString).
- * - 'all': el viaje se lista sin filtro alguno (vista "ver todos los viajes
- *   publicados"): no hubo coincidencia textual ni geográfica que evaluar.
  */
-export type TripMatchType = 'textual' | 'origin' | 'routeNearby' | 'all';
+export type TripMatchType = 'textual' | 'origin' | 'routeNearby';
 
-/** Viaje de resultados enriquecido con la informaciÃ³n de la bÃºsqueda. */
+/** Viaje de resultados enriquecido con la información de la búsqueda. */
 export interface TripSearchResult extends Trip {
   matchType: TripMatchType;
   /**
-   * Distancia en km entre el punto de bÃºsqueda y el origen del viaje.
-   * null si el viaje no tiene coordenadas o no habÃ­a punto de bÃºsqueda.
+   * Distancia en km entre el punto de búsqueda y el origen del viaje.
+   * null si el viaje no tiene coordenadas o no había punto de búsqueda.
    */
-  distanceToOriginKm: number | null;
-  /**
-   * Distancia en km entre el punto de bÃºsqueda y la ruta del viaje
-   * (distancePointToRouteKm). null si no aplicable.
-   */
-  distanceToRouteKm: number | null;
-}
-
+  
 /**
- * Distancia mÃ­nima (km) desde un punto geogrÃ¡fico hasta una lÃ­nea
+ * Distancia mínima (km) desde un punto geográfico hasta una línea
  * representada como un GeoJSON LineString.
- * 
+ *
  * Se calcula sobre cada segmento consecutivo del trayecto (par de
- * coordenadas [lng,lat]) y se toma el mÃ­nimo. No se hace ninguna
- * peticiÃ³n a OSRM: la ruta ya estÃ¡ guardada en route_geometry y la
+ * coordenadas [lng,lat]) y se toma el mínimo. No se hace ninguna
+ * petición a OSRM: la ruta ya está guardada en route_geometry y la
  * distancia se computa puramente en local.
  */
 export const distancePointToRouteKm = (
@@ -123,10 +114,10 @@ export const distancePointToRouteKm = (
 };
 
 /**
- * Distancia (km) mÃ­nima desde un punto p hasta el segmento rectilÃ­neo
+ * Distancia (km) mínima desde un punto p hasta el segmento rectilíneo
  * terrestre entre a y b.
- * 
- * Se proyecta el punto sobre la geodÃ©sica del segmento. Si la proyecciÃ³n
+ *
+ * Se proyecta el punto sobre la geodésica del segmento. Si la proyección
  * cae fuera del segmento, se usa la distancia a los extremos.
  */
 const pointToSegmentDistanceKm = (
@@ -156,21 +147,30 @@ const pointToSegmentDistanceKm = (
   return haversineDistanceKm(p, proj);
 };
 
-interface LatLng {
-  lat: number;
-  lng: number;
+   * Distancia en km entre el punto de búsqueda y la ruta del viaje
+   * (distancePointToRouteKm). null si no aplicable.
+   */
+  distanceToRouteKm: number | null;
 }
 
-const haversineDistanceKm = (a: LatLng, b: LatLng): number => {
-  const EARTH_RADIUS_KM = 6371;
-  const dLat = (b.lat - a.lat) * Math.PI / 180;
-  const dLng = (b.lng - a.lng) * Math.PI / 180;
-  const h = Math.pow(Math.sin(dLat/2), 2) + Math.cos(a.lat * Math.PI/180) * Math.cos(b.lat * Math.PI/180) * Math.pow(Math.sin(dLng/2), 2);
-  return 2 * EARTH_RADIUS_KM * Math.asin(Math.sqrt(h));
-};
+export interface CreateTripParams {
+  origin: string;
+  destination: string;
+  origin_lat: number;
+  origin_lng: number;
+  route_distance_km: number;
+  route_duration_minutes: number;
+  /** Geometría GeoJSON LineString origen→CUCEI (opcional, nula en viajes antiguos). */
+  route_geometry?: LineStringGeometry | null;
+  date: string;
+  time: string;
+  seats_available: number;
+  price: number;
+  notes?: string;
+}
 
 /**
- * Convierte una fila de la base de datos (TripFromDB) al objeto Trip
+ * Convierte una fila de base de datos (vista trips_with_driver) en el tipo Trip
  * que consume la interfaz.
  */
 export const mapTripFromDBToTrip = (trip: TripFromDB): Trip => ({
@@ -192,128 +192,6 @@ export const mapTripFromDBToTrip = (trip: TripFromDB): Trip => ({
 });
 
 /**
- * Columnas que la búsqueda pide a la vista `trips_with_driver`. Incluye las
- * columnas geográficas (origin_lat, origin_lng, route_geometry...) que se
- * añadieron a la tabla `trips` DESPUÉS de crear la vista: si la migración
- * supabase/migrations/006_update_trips_with_driver_view.sql todavía no está
- * aplicada, la vista no las expone y PostgREST responde 42703
- * ("column ... does not exist"). Antes eso hacía fallar la consulta completa y
- * la búsqueda devolvía 0 viajes (tanto "ver todos los viajes" como la búsqueda
- * por ubicación); ahora se detecta y se resuelve sin romper la búsqueda.
- */
-const SEARCH_SELECT_COLUMNS = `
-  id,
-  driver_id,
-  origin,
-  destination,
-  origin_lat,
-  origin_lng,
-  route_distance_km,
-  route_duration_minutes,
-  route_geometry,
-  date,
-  time,
-  seats_available,
-  price,
-  notes,
-  status,
-  created_at,
-  updated_at,
-  driver_name,
-  driver_rating,
-  driver_university,
-  driver_email
-`;
-
-/**
- * Columnas geográficas que la vista puede no exponer. Cuando faltan se leen de
- * la tabla base `trips`, cuya política RLS permite a cualquiera leer los viajes
- * con status = 'active'.
- */
-const GEO_COLUMNS_SELECT =
-  'origin_lat, origin_lng, route_distance_km, route_duration_minutes, route_geometry';
-
-/** Fila de búsqueda: la parte geográfica puede faltar según el estado de la vista. */
-type SearchRow = Partial<TripFromDB> & { id: string };
-
-/** Evita repetir en cada búsqueda el aviso de "la vista no expone las columnas geográficas". */
-let hasWarnedMissingGeoColumns = false;
-
-/**
- * ¿El error de PostgREST significa "esa columna no existe"?
- * 42703 = undefined_column. Se comprueba también el mensaje por robustez.
- */
-const isMissingColumnError = (error: { code?: string; message?: string } | null): boolean => {
-  if (!error) return false;
-  if (error.code === '42703') return true;
-  return /column .* does not exist/i.test(error.message ?? '');
-};
-
-/**
- * Garantiza que las columnas geográficas existan siempre como null cuando la
- * vista no las expone o el viaje es antiguo, de modo que el resto del flujo
- * nunca reciba `undefined`.
- */
-const withGeoDefaults = (row: SearchRow): TripFromDB => ({
-  ...(row as TripFromDB),
-  origin_lat: row.origin_lat ?? null,
-  origin_lng: row.origin_lng ?? null,
-  route_distance_km: row.route_distance_km ?? null,
-  route_duration_minutes: row.route_duration_minutes ?? null,
-  route_geometry: row.route_geometry ?? null,
-});
-
-/**
- * Ejecuta la consulta de viajes activos con los filtros de destino y fecha.
- * El origen NO se filtra en SQL: lo resuelve geoSearchService por coincidencia
- * textual y por proximidad geográfica.
- */
-const runSearchQuery = async (params: TripSearchParams, columns: string) => {
-  let query = supabase.from('trips_with_driver').select(columns).eq('status', 'active');
-
-  if (params.destination && params.destination.trim() !== '') {
-    query = query.ilike('destination', `%${params.destination}%`);
-  }
-
-  if (params.date && params.date.trim() !== '') {
-    query = query.gte('date', params.date);
-  }
-
-  // Orden por fecha ascendente (la relevancia final la decide geoSearchService)
-  return query.order('date', { ascending: true });
-};
-
-/**
- * Lee las columnas geográficas directamente de la tabla base `trips`.
- * Solo se usa cuando la vista no las expone (migración 006 pendiente).
- */
-const fetchGeoColumnsByTripId = async (ids: string[]): Promise<Map<string, SearchRow>> => {
-  const geoById = new Map<string, SearchRow>();
-  if (ids.length === 0) {
-    return geoById;
-  }
-
-  const { data, error } = await supabase
-    .from('trips')
-    .select(`id, ${GEO_COLUMNS_SELECT}`)
-    .in('id', ids);
-
-  if (error) {
-    console.warn(
-      '[fetchTripsForSearch] No se pudieron leer coordenadas/geometría desde la tabla trips:',
-      error.message
-    );
-    return geoById;
-  }
-
-  for (const row of (data ?? []) as unknown as SearchRow[]) {
-    geoById.set(row.id, row);
-  }
-
-  return geoById;
-};
-
-/**
  * Busca viajes activos en Supabase.
  * Aplica los filtros de destino y fecha, pero NO filtra el origen a nivel SQL:
  * el origen se resuelve en geoSearchService (coincidencia textual + geográfica),
@@ -326,45 +204,30 @@ export const fetchTripsForSearch = async (
   params: TripSearchParams
 ): Promise<TripFromDB[]> => {
   try {
-    const response = await runSearchQuery(params, SEARCH_SELECT_COLUMNS);
+    let query = supabase
+      .from('trips_with_driver')
+      .select('*')
+      .eq('status', 'active');
 
-    if (response.error && isMissingColumnError(response.error)) {
-      // La vista no expone las columnas geográficas: se repite la consulta con
-      // '*' (válido para cualquier versión de la vista) y se completan las
-      // coordenadas y route_geometry desde la tabla base `trips`.
-      if (!hasWarnedMissingGeoColumns) {
-        hasWarnedMissingGeoColumns = true;
-        console.warn(
-          '[fetchTripsForSearch] La vista trips_with_driver no expone las columnas geográficas (' +
-            response.error.message +
-            '). Se consultará SELECT * + tabla trips. Aplica ' +
-            'supabase/migrations/006_update_trips_with_driver_view.sql para evitarlo.'
-        );
-      }
-
-      const fallback = await runSearchQuery(params, '*');
-
-      if (fallback.error) {
-        console.error('Error searching trips:', fallback.error);
-        throw fallback.error;
-      }
-
-      const rows = (fallback.data ?? []) as unknown as SearchRow[];
-      const geoById = await fetchGeoColumnsByTripId(rows.map((row) => row.id));
-
-      return rows.map((row) => {
-        const geo = geoById.get(row.id);
-        return withGeoDefaults(geo ? { ...row, ...geo } : row);
-      });
+    if (params.destination && params.destination.trim() !== '') {
+      query = query.ilike('destination', `%${params.destination}%`);
     }
 
-    if (response.error) {
-      console.error('Error searching trips:', response.error);
-      throw response.error;
+    if (params.date && params.date.trim() !== '') {
+      query = query.gte('date', params.date);
     }
 
-    const rows = (response.data ?? []) as unknown as SearchRow[];
-    return rows.map((row) => withGeoDefaults(row));
+    // Orden por fecha ascendente (la relevancia final la decide geoSearchService)
+    query = query.order('date', { ascending: true });
+
+    const { data, error } = await query;
+
+    if (error) {
+      console.error('Error searching trips:', error);
+      throw error;
+    }
+
+    return (data || []) as TripFromDB[];
   } catch (error) {
     console.error('Error in fetchTripsForSearch:', error);
     throw error;
@@ -400,27 +263,6 @@ export const getTripById = async (tripId: string): Promise<Trip | null> => {
     return null;
   }
 };
-
-/**
- * Parámetros para crear un viaje nuevo (ofrecer viaje).
- * Los nombres coinciden con las columnas de la tabla trips en Supabase.
- */
-export interface CreateTripParams {
-  origin: string;
-  destination: string;
-  /** Coordenadas del origen seleccionado por el conductor. */
-  origin_lat: number;
-  origin_lng: number;
-  route_distance_km: number;
-  route_duration_minutes: number;
-  /** Geometría GeoJSON LineString de la ruta origen→CUCEI (para búsquedas "ruta pasa cerca"). */
-  route_geometry?: LineStringGeometry | null;
-  date: string;
-  time: string;
-  seats_available: number;
-  price: number;
-  notes?: string | null;
-}
 
 /**
  * Crea un nuevo viaje en la base de datos

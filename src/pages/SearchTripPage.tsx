@@ -6,7 +6,7 @@ import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 import { FormField } from '../components/ui/FormField';
-import { searchTripsByLocation, SEARCH_RADIUS_KM } from '../services/geoSearchService';
+import { searchTripsByLocation, getAllPublishedTrips, SEARCH_RADIUS_KM } from '../services/geoSearchService';
 import type { TripSearchResult } from '../services/tripService';
 import { formatDistance } from '../services/routingService';
 import { getCurrentUser } from '../services/authService';
@@ -25,6 +25,7 @@ import {
   CheckCircle2,
   Eraser,
   Info,
+  List,
   Loader2,
   MapPin,
   Search,
@@ -64,6 +65,8 @@ const SearchTripPage = () => {
   const [mapPick, setMapPick] = useState<MapPick | null>(null);
   const [date, setDate] = useState('');
   const [hasSearched, setHasSearched] = useState(false);
+  /** true mientras el listado muestra TODOS los viajes publicados (sin filtros). */
+  const [isShowingAllTrips, setIsShowingAllTrips] = useState(false);
   const [trips, setTrips] = useState<TripSearchResult[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -356,6 +359,8 @@ const SearchTripPage = () => {
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
     setHasSearched(true);
+    // Una búsqueda normal sustituye la vista "todos los viajes".
+    setIsShowingAllTrips(false);
     setIsLoading(true);
     setError(null);
     setSuccessMessage(null);
@@ -401,6 +406,32 @@ const SearchTripPage = () => {
       setError('Error al buscar viajes. Por favor intenta nuevamente.');
       setTrips([]);
       setGeoSearchInfo(null);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  /**
+   * Muestra todos los viajes activos publicados, sin aplicar los filtros del
+   * formulario (origen ni fecha). Reutiliza la sección de resultados: solo
+   * cambia el aviso mostrado sobre el listado.
+   */
+  const handleShowAllTrips = async () => {
+    setHasSearched(true);
+    setIsShowingAllTrips(true);
+    setIsLoading(true);
+    setError(null);
+    setSuccessMessage(null);
+    setGeocodingNotice(null);
+    setGeoSearchInfo(null);
+
+    try {
+      const results = await getAllPublishedTrips();
+      setTrips(results);
+    } catch (err) {
+      console.error('Error fetching all published trips:', err);
+      setError('Error al cargar los viajes. Por favor intenta nuevamente.');
+      setTrips([]);
     } finally {
       setIsLoading(false);
     }
@@ -740,9 +771,30 @@ const SearchTripPage = () => {
                   Todos los viajes tienen como destino CUCEI.
                 </div>
               </div>
-              <Button type="submit" variant="primary" size="lg" fullWidth className="mt-6">
-                Buscar Viajes
-              </Button>
+              <div className="mt-6 flex flex-col sm:flex-row gap-3">
+                <Button
+                  type="submit"
+                  variant="primary"
+                  size="lg"
+                  fullWidth
+                  className="flex-1"
+                  disabled={isLoading}
+                >
+                  Buscar Viajes
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="lg"
+                  onClick={handleShowAllTrips}
+                  disabled={isLoading}
+                >
+                  <span className="inline-flex items-center gap-2">
+                    <List className="w-4 h-4" aria-hidden="true" />
+                    Ver todos los viajes
+                  </span>
+                </Button>
+              </div>
             </form>
           </Card>
 
@@ -754,6 +806,12 @@ const SearchTripPage = () => {
                 <span className="text-indigo-600 ml-2">({trips.length})</span>
               </h2>
 
+              {isShowingAllTrips && (
+                <p className="flex items-center gap-1.5 mb-3 text-sm text-indigo-600">
+                  <List className="w-4 h-4 shrink-0" aria-hidden="true" />
+                  Mostrando todos los viajes publicados, ordenados por fecha.
+                </p>
+              )}
               {geoSearchInfo && (
                 <p className="flex items-center gap-1.5 mb-3 text-sm text-indigo-600">
                   {geoSearchInfo.type === 'map' ? (
