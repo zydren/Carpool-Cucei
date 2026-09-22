@@ -1,12 +1,18 @@
-import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 import { FormField } from '../components/ui/FormField';
-import { searchTripsByLocation, getAllPublishedTrips, SEARCH_RADIUS_KM } from '../services/geoSearchService';
+import {
+  searchTripsByLocation,
+  getAllPublishedTrips,
+  SEARCH_RADIUS_KM,
+  ORIGIN_RADIUS_KM,
+} from '../services/geoSearchService';
+import { nearestPointOnRoute } from '../services/tripService';
 import type { TripSearchResult } from '../services/tripService';
 import { formatDistance } from '../services/routingService';
 import { getCurrentUser } from '../services/authService';
@@ -24,12 +30,15 @@ import {
   AlertTriangle,
   CheckCircle2,
   Eraser,
+  Eye,
   Info,
   List,
   Loader2,
   MapPin,
+  Route,
   Search,
   Type,
+  X,
 } from 'lucide-react';
 
 interface SelectedPickup {
@@ -68,6 +77,13 @@ const SearchTripPage = () => {
   /** true mientras el listado muestra TODOS los viajes publicados (sin filtros). */
   const [isShowingAllTrips, setIsShowingAllTrips] = useState(false);
   const [trips, setTrips] = useState<TripSearchResult[]>([]);
+  /**
+   * Punto de partida original del pasajero usado en la última búsqueda.
+   * Se conserva tal cual: nunca se sustituye por el punto de recogida ajustado.
+   */
+  const [searchPoint, setSearchPoint] = useState<MapPick | null>(null);
+  /** Viaje seleccionado en los resultados: su ruta se dibuja en el mapa. */
+  const [mapTrip, setMapTrip] = useState<TripSearchResult | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -361,6 +377,8 @@ const SearchTripPage = () => {
     setHasSearched(true);
     // Una búsqueda normal sustituye la vista "todos los viajes".
     setIsShowingAllTrips(false);
+    // Una nueva búsqueda reemplaza los resultados: se retira la ruta mostrada.
+    setMapTrip(null);
     setIsLoading(true);
     setError(null);
     setSuccessMessage(null);
@@ -390,6 +408,14 @@ const SearchTripPage = () => {
           searchInfo = { type: 'text', name: confirmed.name };
         }
       }
+      // El punto original del pasajero se conserva aparte (searchPoint): el
+      // punto de recogida ajustado sobre la ruta se calcula a partir de él y
+      // nunca lo reemplaza.
+      setSearchPoint(
+        originLatitude !== undefined && originLongitude !== undefined
+          ? { lat: originLatitude, lng: originLongitude }
+          : null
+      );
 
       // Todos los viajes del sistema terminan en CUCEI, por eso no hay
       // filtro de destino: solo se filtra por texto/proximidad de origen y fecha.
@@ -419,6 +445,9 @@ const SearchTripPage = () => {
   const handleShowAllTrips = async () => {
     setHasSearched(true);
     setIsShowingAllTrips(true);
+    // La vista "todos los viajes" no tiene punto de búsqueda ni ruta asociada.
+    setMapTrip(null);
+    setSearchPoint(null);
     setIsLoading(true);
     setError(null);
     setSuccessMessage(null);
@@ -457,6 +486,36 @@ const SearchTripPage = () => {
     setShowSuggestions(false);
     setIsLoadingSuggestions(false);
   };
+
+  /**
+   * El usuario hace clic en un resultado: se guarda el viaje seleccionado y su
+   * ruta se dibuja inmediatamente en el mapa (sin repetir la búsqueda). Si se
+   * vuelve a hacer clic en el mismo viaje, se oculta la ruta.
+   */
+  const handleSelectTripOnMap = (trip: TripSearchResult) => {
+    setMapTrip((current) => (current?.id === trip.id ? null : trip));
+  };
+
+  /**
+   * Punto de recogida ajustado: punto de la ruta del viaje seleccionado más
+   * cercano al punto ORIGINAL del pasajero. Reutiliza la proyección de
+   * nearestPointOnRoute / distancePointToRouteKm (misma matemática en km).
+   */
+  const pickupInfo = useMemo(() => {
+    if (!mapTrip || !searchPoint || !mapTrip.routeGeometry) {
+      return null;
+    }
+    return nearestPointOnRoute(searchPoint, mapTrip.routeGeometry);
+  }, [mapTrip, searchPoint]);
+
+  /**
+   * El punto de recogida solo se marca si está realmente despegado del punto
+   * original (más de 20 m); si el pasajero ya está sobre la ruta, no aporta.
+   */
+  const pickupPoint =
+    pickupInfo && pickupInfo.distanceKm * 1000 > 20
+      ? { lat: pickupInfo.lat, lng: pickupInfo.lng }
+      : null;
 
   const handleRequestClick = (trip: TripSearchResult) => {
     if (!isAuthenticated) {
@@ -588,7 +647,15 @@ const SearchTripPage = () => {
     }
 
     return (
-      <Button variant="primary" size="sm" onClick={() => handleRequestClick(trip)}>
+      <Button
+        variant="primary"
+        size="sm"
+        onClick={(e) => {
+          // No debe seleccionar además la tarjeta (eso ocultaría la ruta).
+          e.stopPropagation();
+          handleRequestClick(trip);
+        }}
+      >
         Solicitar lugar
       </Button>
     );
@@ -817,12 +884,12 @@ const SearchTripPage = () => {
                   {geoSearchInfo.type === 'map' ? (
                     <>
                       <MapPin className="w-4 h-4 shrink-0" aria-hidden="true" />
-                      Buscando viajes cerca de {geoSearchInfo.name} (radio de {SEARCH_RADIUS_KM} km).
+                      Buscando viajes cerca de {geoSearchInfo.name} (ruta a {SEARCH_RADIUS_KM} km · origen a {ORIGIN_RADIUS_KM} km).
                     </>
                   ) : (
                     <>
                       <Search className="w-4 h-4 shrink-0" aria-hidden="true" />
-                      Buscando viajes cerca de «{geoSearchInfo.name}» (radio de {SEARCH_RADIUS_KM} km).
+                      Buscando viajes cerca de «{geoSearchInfo.name}» (ruta a {SEARCH_RADIUS_KM} km · origen a {ORIGIN_RADIUS_KM} km).
                     </>
                   )}
                 </p>
@@ -834,6 +901,106 @@ const SearchTripPage = () => {
                 </p>
               )}
 
+              {/* Ruta del viaje seleccionado: aparece al hacer clic en un resultado, sin
+                  repetir la búsqueda. Conserva el punto original del pasajero y, si
+                  procede, marca el punto de recogida ajustado sobre la ruta. */}
+              {!isLoading && trips.length > 0 && mapTrip && (
+                <Card className="p-4 mb-6">
+                  <div className="flex items-start justify-between gap-3 mb-3">
+                    <div>
+                      <h3 className="text-base font-semibold text-gray-900 flex items-center gap-1.5">
+                        <Route className="w-4 h-4 text-indigo-600" aria-hidden="true" />
+                        Ruta del viaje seleccionado
+                      </h3>
+                      <p className="text-xs text-gray-600 mt-1">
+                        {mapTrip.origin} → {mapTrip.destination}
+                      </p>
+                    </div>
+                    <Button type="button" variant="ghost" size="sm" onClick={() => setMapTrip(null)}>
+                      <span className="inline-flex items-center gap-2">
+                        <X className="w-4 h-4" aria-hidden="true" />
+                        Ocultar
+                      </span>
+                    </Button>
+                  </div>
+
+                  {mapTrip.routeGeometry ? (
+                    <LocationPickerMap
+                      centerLat={mapTrip.routeGeometry.coordinates[0]?.[1] ?? 20.66}
+                      centerLng={mapTrip.routeGeometry.coordinates[0]?.[0] ?? -103.35}
+                      zoom={11}
+                      routeGeometry={mapTrip.routeGeometry}
+                      passengerOrigin={searchPoint}
+                      passengerLabel="Tu punto de partida"
+                      pickupPoint={pickupPoint}
+                      pickupLabel={
+                        pickupInfo
+                          ? `Punto de recogida (a ${formatDistance(pickupInfo.distanceKm * 1000)})`
+                          : 'Punto de recogida sobre la ruta'
+                      }
+                      className="rounded-lg border border-gray-300"
+                      style={{ height: '320px', width: '100%' }}
+                    />
+                  ) : (
+                    <p className="text-sm text-gray-500">
+                      Este viaje no tiene la geometría de la ruta guardada, así que solo se pueden
+                      mostrar tu punto de partida y los datos del viaje.
+                    </p>
+                  )}
+
+                  {/* Leyenda: punto original → distancia de ajuste → punto sobre la ruta */}
+                  <div className="mt-3 grid gap-3 sm:grid-cols-3 text-xs text-gray-600">
+                    <div className="flex items-start gap-2">
+                      <span
+                        className="mt-1 h-3 w-3 shrink-0 rounded-full bg-green-600 border-2 border-white shadow"
+                        aria-hidden="true"
+                      />
+                      <div>
+                        <p className="font-medium text-gray-900">Tu punto de partida</p>
+                        <p>
+                          {searchPoint
+                            ? `Lat ${searchPoint.lat.toFixed(5)} · Lng ${searchPoint.lng.toFixed(5)}`
+                            : 'No señalaste un punto en el mapa'}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <span
+                        className="mt-1 h-3 w-3 shrink-0 rounded-full bg-amber-500 border-2 border-white shadow"
+                        aria-hidden="true"
+                      />
+                      <div>
+                        <p className="font-medium text-gray-900">Punto de recogida sobre la ruta</p>
+                        <p>
+                          {pickupInfo
+                            ? pickupPoint
+                              ? `A ${formatDistance(pickupInfo.distanceKm * 1000)} de tu punto`
+                              : 'Tu punto ya está sobre la ruta del conductor'
+                            : 'No disponible para este viaje'}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <span className="mt-2 h-1 w-5 shrink-0 rounded bg-indigo-600" aria-hidden="true" />
+                      <div>
+                        <p className="font-medium text-gray-900">Ruta del conductor</p>
+                        <p>
+                          {mapTrip.routeGeometry
+                            ? `${mapTrip.routeGeometry.coordinates.length} puntos de la ruta origen → CUCEI`
+                            : 'Sin geometría guardada'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </Card>
+              )}
+
+              {!isLoading && trips.length > 0 && !mapTrip && (
+                <p className="flex items-center gap-1.5 mb-3 text-sm text-gray-500">
+                  <Route className="w-4 h-4 shrink-0" aria-hidden="true" />
+                  Haz clic en un viaje para ver su ruta en el mapa.
+                </p>
+              )}
               {isLoading ? (
                 <Card className="p-12 text-center">
                   <div className="flex flex-col items-center justify-center">
@@ -869,7 +1036,14 @@ const SearchTripPage = () => {
               ) : (
 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {trips.map((trip) => (
-                    <Card key={trip.id} className="p-6 hover" hover>
+                    <Card
+                      key={trip.id}
+                      className={`p-6 hover cursor-pointer ${
+                        mapTrip?.id === trip.id ? 'ring-2 ring-indigo-500' : ''
+                      }`}
+                      hover
+                      onClick={() => handleSelectTripOnMap(trip)}
+                    >
                       <div className="flex items-start justify-between mb-4">
                         <div className="flex-1">
                           <div className="flex items-center mb-2">
@@ -926,6 +1100,12 @@ const SearchTripPage = () => {
                             Origen a {formatDistance(trip.distanceToOriginKm * 1000)} de tu búsqueda
                           </span>
                         )}
+                        {trip.matchType === 'routeNearby' && trip.distanceToRouteKm !== null && (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200">
+                            <Route className="w-3.5 h-3.5" aria-hidden="true" />
+                            Su ruta pasa a {formatDistance(trip.distanceToRouteKm * 1000)} de tu punto
+                          </span>
+                        )}
                       </div>
 
                       <div className="border-t pt-4 mb-4">
@@ -939,6 +1119,13 @@ const SearchTripPage = () => {
                             <div>
                               <p className="font-medium text-gray-900">{trip.driver.name}</p>
                               <p className="text-sm text-gray-500">{trip.driver.university}</p>
+                              <Link
+                                to={`/perfil/${trip.driver.id}`}
+                                onClick={(e) => e.stopPropagation()}
+                                className="inline-flex items-center gap-1 mt-1 text-sm font-medium text-indigo-600 hover:text-indigo-700"
+                              >
+                                <Eye className="w-4 h-4" aria-hidden="true" /> Ver perfil
+                              </Link>
                             </div>
                           </div>
                           <div className="flex items-center">

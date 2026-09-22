@@ -52,6 +52,7 @@ export interface Trip {
   seatsAvailable: number;
   price: number;
   driver: {
+    id: string;
     name: string;
     rating: number;
     university: string;
@@ -123,19 +124,21 @@ export const distancePointToRouteKm = (
 };
 
 /**
- * Distancia (km) mÃ­nima desde un punto p hasta el segmento rectilÃ­neo
- * terrestre entre a y b.
- * 
- * Se proyecta el punto sobre la geodÃ©sica del segmento. Si la proyecciÃ³n
- * cae fuera del segmento, se usa la distancia a los extremos.
+ * Punto del segmento rectilíneo terrestre a→b más cercano al punto p, junto
+ * con su distancia en km.
+ *
+ * Devuelve el punto proyectado sobre la geodésica del segmento (y, si la
+ * proyección cae fuera, el extremo más cercano). Es la MISMA matemática que
+ * usaba pointToSegmentDistanceKm, extraída para poder reutilizarla y obtener
+ * además las coordenadas del punto proyectado.
  */
-const pointToSegmentDistanceKm = (
+const closestPointOnSegment = (
   p: LatLng,
   a: LatLng,
   b: LatLng
-): number => {
+): { lat: number; lng: number; distanceKm: number } => {
   if (a.lat === b.lat && a.lng === b.lng) {
-    return haversineDistanceKm(p, a);
+    return { lat: a.lat, lng: a.lng, distanceKm: haversineDistanceKm(p, a) };
   }
 
   const d_ab = haversineDistanceKm(a, b);
@@ -143,17 +146,74 @@ const pointToSegmentDistanceKm = (
   const d_bp = haversineDistanceKm(p, b);
 
   if (d_ab === 0) {
-    return d_ap;
+    return { lat: a.lat, lng: a.lng, distanceKm: d_ap };
   }
 
-  const t = Math.max(0, Math.min(1, (d_ap * d_ap + d_ab * d_ab - d_bp * d_bp) / (2 * d_ap * d_ab)));
+  // Coseno del ángulo en a (ley de cosenos sobre las distancias haversine).
+  const cosA = (d_ap * d_ap + d_ab * d_ab - d_bp * d_bp) / (2 * d_ap * d_ab);
+
+  // Parámetro de proyección sobre el segmento: t = |a→p|·cos(A) / |a→b|.
+  // (Usar cos(A) directamente como t colocaba el pie de la perpendicular en el
+  // lugar equivocado en segmentos largos: el punto proyectado se iba hacia un
+  // extremo y la distancia salía sobreestimada.)
+  const t = Math.max(0, Math.min(1, (d_ap * cosA) / d_ab));
 
   const proj: LatLng = {
     lat: a.lat + t * (b.lat - a.lat),
     lng: a.lng + t * (b.lng - a.lng),
   };
 
-  return haversineDistanceKm(p, proj);
+  return { lat: proj.lat, lng: proj.lng, distanceKm: haversineDistanceKm(p, proj) };
+};
+
+/**
+ * Distancia (km) mínima desde un punto p hasta el segmento rectilíneo
+ * terrestre entre a y b. Envoltorio de closestPointOnSegment que conserva el
+ * comportamiento y la firma anteriores.
+ */
+const pointToSegmentDistanceKm = (p: LatLng, a: LatLng, b: LatLng): number =>
+  closestPointOnSegment(p, a, b).distanceKm;
+
+/**
+ * Punto de la ruta (route_geometry) más cercano a un punto geográfico.
+ *
+ * Reutiliza la misma proyección que distancePointToRouteKm
+ * (closestPointOnSegment): recorre los segmentos del LineString y devuelve el
+ * punto proyectado de menor distancia. No añade matemática nueva ni llamadas a
+ * OSRM; sirve para dibujar el "punto de recogida ajustado" sobre la ruta sin
+ * sustituir nunca el punto original del pasajero.
+ *
+ * @param point Punto del pasajero (lat/lng en grados)
+ * @param geometry GeoJSON LineString de la ruta (coordenadas [lng,lat])
+ * @returns { lat, lng, distanceKm } con el punto proyectado y su distancia, o
+ *          null si no hay geometría válida.
+ */
+export const nearestPointOnRoute = (
+  point: { lat: number; lng: number },
+  geometry: LineStringGeometry | null
+): { lat: number; lng: number; distanceKm: number } | null => {
+  if (!geometry || !Number.isFinite(point.lat) || !Number.isFinite(point.lng)) {
+    return null;
+  }
+
+  const coords = geometry.coordinates;
+  if (!Array.isArray(coords) || coords.length < 2) {
+    return null;
+  }
+
+  const p: LatLng = { lat: point.lat, lng: point.lng };
+  let best: { lat: number; lng: number; distanceKm: number } | null = null;
+
+  for (let i = 0; i < coords.length - 1; i += 1) {
+    const a: LatLng = { lat: coords[i][1], lng: coords[i][0] };
+    const b: LatLng = { lat: coords[i + 1][1], lng: coords[i + 1][0] };
+    const candidate = closestPointOnSegment(p, a, b);
+    if (best === null || candidate.distanceKm < best.distanceKm) {
+      best = candidate;
+    }
+  }
+
+  return best;
 };
 
 interface LatLng {
@@ -185,6 +245,7 @@ export const mapTripFromDBToTrip = (trip: TripFromDB): Trip => ({
   seatsAvailable: trip.seats_available,
   price: trip.price,
   driver: {
+    id: trip.driver_id,
     name: trip.driver_name,
     rating: trip.driver_rating,
     university: trip.driver_university,

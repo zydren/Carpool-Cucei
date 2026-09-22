@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import {
   AlertCircle,
   Armchair,
@@ -55,6 +55,18 @@ interface Notice {
 
 const MyTripsPage = () => {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Deep-link desde la campana de notificaciones (?tab=driver | ?tab=passenger).
+  // La pestaña se deriva directamente de la URL (por defecto 'driver') para que
+  // los enlaces de las notificaciones abran la vista correcta sin lógica extra.
+  const activeTab: 'driver' | 'passenger' =
+    searchParams.get('tab') === 'passenger' ? 'passenger' : 'driver';
+
+  const handleTabChange = (tab: 'driver' | 'passenger') => {
+    if (tab === activeTab) return;
+    setSearchParams(tab === 'passenger' ? { tab } : {});
+  };
 
   const [isLoading, setIsLoading] = useState(true);
   const [trips, setTrips] = useState<TripFromDB[]>([]);
@@ -63,7 +75,6 @@ const MyTripsPage = () => {
   const [notice, setNotice] = useState<Notice | null>(null);
   const [processingRequestId, setProcessingRequestId] = useState<string | null>(null);
   const [deletingTripId, setDeletingTripId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'driver' | 'passenger'>('driver');
   const [passengerTrips, setPassengerTrips] = useState<MyRequestedTrip[]>([]);
   const [cancellingRequestId, setCancellingRequestId] = useState<string | null>(null);
   const [ratedDriversByTrip, setRatedDriversByTrip] = useState<Record<string, boolean>>({});
@@ -334,7 +345,7 @@ const MyTripsPage = () => {
               type="button"
               role="tab"
               aria-selected={activeTab === 'driver'}
-              onClick={() => setActiveTab('driver')}
+              onClick={() => handleTabChange('driver')}
               className={`flex-1 py-2.5 text-sm font-medium rounded-md transition-colors ${
                 activeTab === 'driver'
                   ? 'bg-indigo-600 text-white'
@@ -350,7 +361,7 @@ const MyTripsPage = () => {
               type="button"
               role="tab"
               aria-selected={activeTab === 'passenger'}
-              onClick={() => setActiveTab('passenger')}
+              onClick={() => handleTabChange('passenger')}
               className={`flex-1 py-2.5 text-sm font-medium rounded-md transition-colors ${
                 activeTab === 'passenger'
                   ? 'bg-indigo-600 text-white'
@@ -504,6 +515,18 @@ const MyTripsPage = () => {
                                     {tripRequestStatusLabel[request.status]}
                                   </span>
                                 </div>
+                                <p className="flex items-center gap-1.5 text-sm text-gray-600 mb-1">
+                                  <Star className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
+                                  {request.passenger_rating > 0
+                                    ? `${request.passenger_rating} / 5`
+                                    : 'Sin calificaciones todavía'}
+                                </p>
+                                <Link
+                                  to={`/perfil/${request.passenger_id}`}
+                                  className="inline-flex items-center gap-1 text-sm font-medium text-indigo-600 hover:text-indigo-700 mb-1"
+                                >
+                                  <Eye className="w-4 h-4" aria-hidden="true" /> Ver perfil
+                                </Link>
 
                                 {request.passenger_email && (
                                   <p className="flex items-center gap-1.5 text-sm text-gray-600 mb-1">
@@ -638,6 +661,12 @@ const MyTripsPage = () => {
                               ? `${request.driver_rating} / 5`
                               : 'Sin calificaciones aún'}
                           </span>
+                          <Link
+                            to={`/perfil/${request.driver_id}`}
+                            className="inline-flex items-center gap-1 font-medium text-indigo-600 hover:text-indigo-700"
+                          >
+                            <Eye className="w-4 h-4" aria-hidden="true" /> Ver perfil
+                          </Link>
                         </div>
                         {request.pickup_address && (
                           <p className="text-sm text-gray-600 mt-1 flex items-center gap-1.5">

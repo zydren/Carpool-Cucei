@@ -14,11 +14,21 @@ import type {
 // ============================================================
 
 /**
- * Radio (km) alrededor del punto de búsqueda dentro del cual se consideran
- * los viajes por "origen cercano". Es la ÚNICA constante de radio del
- * proyecto: cambiar este número reconfigura toda la búsqueda por proximidad.
+ * Radio (km) alrededor del punto de búsqueda usado por la coincidencia
+ * `routeNearby`: distancia máxima permitida entre el punto de partida del
+ * pasajero y la RUTA del conductor (route_geometry). Es deliberadamente más
+ * estricto que el radio de origen (ORIGIN_RADIUS_KM), porque aquí se mide
+ * punto → polilínea de la ruta, no punto → origen del viaje.
  */
-export const SEARCH_RADIUS_KM = 5;
+export const SEARCH_RADIUS_KM = 1;
+
+/**
+ * Radio (km) alrededor del punto de búsqueda usado por la coincidencia
+ * `origin`: distancia máxima permitida entre el punto del pasajero y el ORIGEN
+ * del viaje. Conserva el valor histórico (5 km) para no alterar la búsqueda por
+ * origen cercano.
+ */
+export const ORIGIN_RADIUS_KM = 5;
 
 // ============================================================
 // DIAGNÓSTICO TEMPORAL DE LA BÚSQUEDA (retirar al cerrar la incidencia)
@@ -140,10 +150,10 @@ const isTextualOriginMatch = (origin: string, query: string): boolean => {
  *
  * - Si se reciben originLatitude/originLongitude (provenientes del texto
  *   geocodificado con Nominatim o de un clic en el mapa): se incluyen los
- *   viajes cuyo ORIGEN está dentro de SEARCH_RADIUS_KM del punto de búsqueda,
- *   y también los viajes cuya route_geometry (guardada en la BD) pasa dentro
- *   de SEARCH_RADIUS_KM del punto. La distancia a la ruta se calcula en local
- *   con distancePointToRouteKm sobre los segmentos del LineString: NO se hace
+ *   viajes cuyo ORIGEN está dentro de ORIGIN_RADIUS_KM del punto de búsqueda, y
+ *   también los viajes cuya route_geometry (guardada en la BD) pasa dentro de
+ *   SEARCH_RADIUS_KM del punto. La distancia a la ruta se calcula en local con
+ *   distancePointToRouteKm sobre los segmentos del LineString: NO se hace
  *   ninguna petición a OSRM por viaje durante la búsqueda.
  * - El texto de origen (params.origin) se conserva como complemento textual:
  *   los viajes cuyo origen contiene ese texto también aparecen.
@@ -216,7 +226,7 @@ export const searchTripsByLocation = async (
     // Señales de coincidencia calculadas SIEMPRE (aunque no haya punto de
     // búsqueda) para poder diagnosticarlas. Ninguna descarta a las demás:
     // basta una (texto, origen cerca o ruta cerca) para conservar el viaje.
-    const originNear = distanceToOriginKm !== null && distanceToOriginKm <= SEARCH_RADIUS_KM;
+    const originNear = distanceToOriginKm !== null && distanceToOriginKm <= ORIGIN_RADIUS_KM;
     const routeNear = distanceToRouteKm !== null && distanceToRouteKm <= SEARCH_RADIUS_KM;
 
     let matchType: TripSearchResult['matchType'] | null = null;
@@ -259,7 +269,8 @@ export const searchTripsByLocation = async (
         originNear,
         routeNear,
         matchType: matchType ?? 'null (viaje DESCARTADO)',
-        searchRadiusKm: SEARCH_RADIUS_KM,
+        routeRadiusKm: SEARCH_RADIUS_KM,
+        originRadiusKm: ORIGIN_RADIUS_KM,
       });
     }
 

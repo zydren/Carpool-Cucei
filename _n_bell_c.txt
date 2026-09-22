@@ -1,0 +1,21 @@
+
+          <div className="px-4 py-2 border-t border-gray-100">
+            <button
+              type="button"
+              onClick={() => {
+                setIsOpen(false);
+                onNavigate?.();
+                navigate('/mis-viajes');
+              }}
+              className="w-full text-center text-xs font-medium text-indigo-600 hover:text-indigo-700"
+            >
+              Ver Mis viajes
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default NotificationBell;

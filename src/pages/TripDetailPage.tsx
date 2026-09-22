@@ -7,6 +7,7 @@ import {
   Calendar,
   CheckCircle2,
   Clock,
+  Eye,
   GraduationCap,
   Mail,
   MapPin,
@@ -258,6 +259,12 @@ const TripDetailPage = () => {
                           <h3 className="text-lg font-semibold text-gray-900">
                             {passenger.passenger_name}
                           </h3>
+                          <Link
+                            to={`/perfil/${passenger.passenger_id}`}
+                            className="inline-flex items-center gap-1 text-sm font-medium text-indigo-600 hover:text-indigo-700 mt-0.5"
+                          >
+                            <Eye className="w-4 h-4" aria-hidden="true" /> Ver perfil
+                          </Link>
                           <div className="text-sm text-gray-600 mt-1 space-y-1">
                             <p className="flex items-center gap-1.5">
                               <GraduationCap className="w-4 h-4 shrink-0" aria-hidden="true" />

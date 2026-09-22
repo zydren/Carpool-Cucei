@@ -1,0 +1,152 @@
+
+-- ============================================================
+-- 4. Funciones de trigger (SECURITY DEFINER + search_path seguro)
+-- ------------------------------------------------------------
+-- Ambas funciones se ejecutan con los privilegios de su dueño (el rol
+-- que aplica la migración), por lo que pueden insertar en
+-- public.notifications aunque ningún rol de la API tenga permiso INSERT.
+--
+-- Nota de seguridad: son funciones que devuelven TRIGGER, así que
+-- PostgreSQL no permite invocarlas directamente (solo se ejecutan como
+-- triggers de trip_requests). No son alcanzables desde /rest/v1/rpc.
+-- ============================================================
+
+-- ------------------------------------------------------------
+-- 4.1 Solicitud creada -> notifica al CONDUCTOR
+-- ------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.notify_trip_request_created()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE
+  v_driver_id UUID;
+  v_passenger_name TEXT;
+BEGIN
+  -- Solo solicitudes pendientes (el flujo real crea siempre 'pending')
+  IF NEW.status IS DISTINCT FROM 'pending' THEN
+    RETURN NEW;
+  END IF;
+
+  SELECT t.driver_id INTO v_driver_id
+  FROM public.trips t
+  WHERE t.id = NEW.trip_id;
+
+  -- Sin viaje asociado no hay destinatario (no debería ocurrir: FK + trigger de validación)
+  IF v_driver_id IS NULL THEN
+    RETURN NEW;
+  END IF;
+
+  -- Nunca notificar al propio solicitante
+  IF v_driver_id = NEW.passenger_id THEN
+    RETURN NEW;
+  END IF;
+
+  SELECT p.full_name INTO v_passenger_name
+  FROM public.profiles p
+  WHERE p.id = NEW.passenger_id;
+
+  INSERT INTO public.notifications (user_id, type, title, message, related_trip_id, related_request_id)
+  VALUES (
+    v_driver_id,
+    'request_created',
+    'Nueva solicitud de viaje',
+    COALESCE(v_passenger_name, 'Un pasajero') || ' solicitó un lugar en tu viaje.',
+    NEW.trip_id,
+    NEW.id
+  );
+
+  RETURN NEW;
+END;
+$$;
+
+COMMENT ON FUNCTION public.notify_trip_request_created() IS
+  'Trigger AFTER INSERT en trip_requests: notifica al conductor que un pasajero solicitó un lugar';
+
+-- ------------------------------------------------------------
+-- 4.2 Cambio de estado -> notifica a la CONTRAPARTE
+--     accepted/rejected -> pasajero | cancelled -> conductor
+--     (las RPC accept/reject/cancel ya validan quién puede cambiar el estado)
+-- ------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.notify_trip_request_status_changed()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE
+  v_driver_id UUID;
+  v_passenger_name TEXT;
+  v_recipient UUID;
+  v_type TEXT;
+  v_title TEXT;
+  v_message TEXT;
+BEGIN
+  -- Solo transiciones que salen de 'pending' hacia un estado final
+  IF OLD.status IS DISTINCT FROM 'pending' OR NEW.status IS NOT DISTINCT FROM 'pending' THEN
+    RETURN NEW;
+  END IF;
+
+  SELECT t.driver_id INTO v_driver_id
+  FROM public.trips t
+  WHERE t.id = NEW.trip_id;
+
+  IF v_driver_id IS NULL THEN
+    RETURN NEW;
+  END IF;
+
+  IF NEW.status = 'accepted' THEN
+    v_recipient := NEW.passenger_id;
+    v_type := 'request_accepted';
+    v_title := 'Solicitud aceptada';
+    v_message := 'Tu solicitud de viaje fue aceptada.';
+  ELSIF NEW.status = 'rejected' THEN
+    v_recipient := NEW.passenger_id;
+    v_type := 'request_rejected';
+    v_title := 'Solicitud rechazada';
+    v_message := 'Tu solicitud de viaje fue rechazada.';
+  ELSIF NEW.status = 'cancelled' THEN
+    SELECT p.full_name INTO v_passenger_name
+    FROM public.profiles p
+    WHERE p.id = NEW.passenger_id;
+
+    v_recipient := v_driver_id;
+    v_type := 'request_cancelled';
+    v_title := 'Solicitud cancelada';
+    v_message := COALESCE(v_passenger_name, 'Un pasajero') || ' canceló su solicitud en tu viaje.';
+  ELSE
+    RETURN NEW;
+  END IF;
+
+  IF v_recipient IS NULL THEN
+    RETURN NEW;
+  END IF;
+
+  INSERT INTO public.notifications (user_id, type, title, message, related_trip_id, related_request_id)
+  VALUES (v_recipient, v_type, v_title, v_message, NEW.trip_id, NEW.id);
+
+  RETURN NEW;
+END;
+$$;
+
+COMMENT ON FUNCTION public.notify_trip_request_status_changed() IS
+  'Trigger AFTER UPDATE OF status en trip_requests: notifica al pasajero (aceptada/rechazada) o al conductor (cancelada)';
+
+-- ============================================================
+-- 5. Triggers sobre public.trip_requests
+--    No se tocan las RPC existentes: ellas solo hacen UPDATE del
+--    status y estos triggers se disparan después.
+-- ============================================================
+DROP TRIGGER IF EXISTS notify_trip_request_created ON public.trip_requests;
+CREATE TRIGGER notify_trip_request_created
+  AFTER INSERT ON public.trip_requests
+  FOR EACH ROW
+  EXECUTE FUNCTION public.notify_trip_request_created();
+
+DROP TRIGGER IF EXISTS notify_trip_request_status_changed ON public.trip_requests;
+CREATE TRIGGER notify_trip_request_status_changed
+  AFTER UPDATE OF status ON public.trip_requests
+  FOR EACH ROW
+  WHEN (OLD.status IS DISTINCT FROM NEW.status)
+  EXECUTE FUNCTION public.notify_trip_request_status_changed();

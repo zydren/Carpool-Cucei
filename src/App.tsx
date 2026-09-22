@@ -14,6 +14,8 @@ import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
 import TripDetailPage from './pages/TripDetailPage';
+import MyProfilePage from './pages/MyProfilePage';
+import PublicProfilePage from './pages/PublicProfilePage';
 
 function App() {
   return (
@@ -28,6 +30,8 @@ function App() {
         <Route path="/ofrecer-viaje" element={<OfferTripPage />} />
         <Route path="/mis-viajes" element={<MyTripsPage />} />
         <Route path="/mis-viajes/:tripId" element={<TripDetailPage />} />
+        <Route path="/perfil" element={<MyProfilePage />} />
+        <Route path="/perfil/:userId" element={<PublicProfilePage />} />
         <Route path="/registrar-auto" element={<CarRegistrationPage />} />
         <Route path="/test-supabase" element={<SupabaseTestPage />} />
         <Route path="/login" element={<LoginPage />} />

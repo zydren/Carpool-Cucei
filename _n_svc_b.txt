@@ -1,0 +1,77 @@
+
+/**
+ * Marca una notificación propia como leída.
+ * Se filtra también por user_id: la política RLS ya lo garantiza, pero así el
+ * UPDATE no puede tocar la notificación de otra persona ni por error.
+ */
+export const markNotificationAsRead = async (notificationId: string): Promise<void> => {
+  const userId = await getAuthenticatedUserId();
+
+  const { error } = await supabase
+    .from('notifications')
+    .update({ read: true })
+    .eq('id', notificationId)
+    .eq('user_id', userId);
+
+  if (error) {
+    console.error('Error marking notification as read:', error);
+    throw new Error('No se pudo marcar la notificación como leída.');
+  }
+};
+
+/**
+ * Marca todas las notificaciones propias sin leer como leídas.
+ */
+export const markAllMyNotificationsAsRead = async (): Promise<void> => {
+  const userId = await getAuthenticatedUserId();
+
+  const { error } = await supabase
+    .from('notifications')
+    .update({ read: true })
+    .eq('user_id', userId)
+    .eq('read', false);
+
+  if (error) {
+    console.error('Error marking all notifications as read:', error);
+    throw new Error('No se pudieron marcar las notificaciones como leídas.');
+  }
+};
+
+/**
+ * Elimina una notificación propia.
+ * Disponible para un uso futuro (la política RLS "Users can delete own
+ * notifications" ya lo permite); la Etapa 1 no muestra esta acción en la UI.
+ */
+export const deleteNotification = async (notificationId: string): Promise<void> => {
+  const userId = await getAuthenticatedUserId();
+
+  const { error } = await supabase
+    .from('notifications')
+    .delete()
+    .eq('id', notificationId)
+    .eq('user_id', userId);
+
+  if (error) {
+    console.error('Error deleting notification:', error);
+    throw new Error('No se pudo eliminar la notificación.');
+  }
+};
+
+/**
+ * Formatea la fecha/hora de una notificación para mostrarla en la lista.
+ * @returns Cadena vacía si la fecha almacenada no es válida.
+ */
+export const formatNotificationDate = (createdAt: string): string => {
+  const date = new Date(createdAt);
+
+  if (Number.isNaN(date.getTime())) {
+    return '';
+  }
+
+  return date.toLocaleString('es-MX', {
+    day: '2-digit',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+};

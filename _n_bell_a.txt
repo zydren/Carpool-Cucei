@@ -1,0 +1,161 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Bell, CheckCheck, Loader2 } from 'lucide-react';
+import {
+  formatNotificationDate,
+  getMyNotifications,
+  getUnreadNotificationsCount,
+  markAllMyNotificationsAsRead,
+  markNotificationAsRead,
+  notificationTargetPath,
+} from '../services/notificationService';
+import type { AppNotification } from '../services/notificationService';
+
+interface NotificationBellProps {
+  /**
+   * Lado hacia el que se abre el panel. En el menú móvil conviene 'left'
+   * para que no se salga de la pantalla.
+   */
+  align?: 'right' | 'left';
+  /** Se llama al navegar a "Mis viajes" (el navbar móvil lo usa para cerrarse). */
+  onNavigate?: () => void;
+  className?: string;
+}
+
+/** Máximo de notificaciones que se listan en el desplegable. */
+const NOTIFICATIONS_LIMIT = 20;
+
+/**
+ * Campana de notificaciones del navbar.
+ *
+ * - Muestra el contador de no leídas.
+ * - Al abrirse lista mensaje, título, fecha/hora y estado leído/no leído.
+ * - Permite marcar una notificación como leída (clic o botón) y todas a la vez.
+ * - Al hacer clic navega a "Mis viajes" en la pestaña que corresponde al tipo.
+ * - Los errores se registran en consola y NUNCA rompen la navegación: si la
+ *   migración de notificaciones todavía no está aplicada, la campana queda
+ *   vacía y el resto de la aplicación sigue funcionando igual.
+ */
+const NotificationBell = ({
+  align = 'right',
+  onNavigate,
+  className = '',
+}: NotificationBellProps) => {
+  const navigate = useNavigate();
+  const containerRef = useRef<HTMLDivElement | null>(null);
+
+  const [isOpen, setIsOpen] = useState(false);
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [isLoading, setIsLoading] = useState(false);
+  const [processingId, setProcessingId] = useState<string | null>(null);
+
+  /** Carga la lista y el contador de no leídas. */
+  const refresh = useCallback(async () => {
+    setIsLoading(true);
+
+    try {
+      const [list, count] = await Promise.all([
+        getMyNotifications(NOTIFICATIONS_LIMIT),
+        getUnreadNotificationsCount(),
+      ]);
+      setNotifications(list);
+      setUnreadCount(count);
+    } catch (error) {
+      console.warn('No se pudieron cargar las notificaciones:', error);
+      setNotifications([]);
+      setUnreadCount(0);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  // Carga inicial (el navbar se monta en cada página).
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  // Cierre al hacer clic fuera o con la tecla Escape.
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleClickOutside = (event: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isOpen]);
+
+  const handleToggle = () => {
+    const nextIsOpen = !isOpen;
+    setIsOpen(nextIsOpen);
+
+    // Al abrir se refresca para reflejar lo último que ocurrió.
+    if (nextIsOpen) {
+      void refresh();
+    }
+  };
+
+  /** Clic en una notificación: se marca leída y se navega a "Mis viajes". */
+  const handleOpenNotification = async (notification: AppNotification) => {
+    setIsOpen(false);
+    onNavigate?.();
+
+    if (!notification.read) {
+      // Actualización optimista: el contador baja aunque el UPDATE tarde.
+      setNotifications((prev) =>
+        prev.map((item) => (item.id === notification.id ? { ...item, read: true } : item))
+      );
+      setUnreadCount((prev) => Math.max(0, prev - 1));
+
+      try {
+        await markNotificationAsRead(notification.id);
+      } catch (error) {
+        console.warn('No se pudo marcar la notificación como leída:', error);
+      }
+    }
+
+    navigate(notificationTargetPath[notification.type] ?? '/mis-viajes');
+  };
+
+  /** Botón "Marcar leída" de una notificación concreta. */
+  const handleMarkOneAsRead = async (notification: AppNotification) => {
+    setProcessingId(notification.id);
+
+    try {
+      await markNotificationAsRead(notification.id);
+      setNotifications((prev) =>
+        prev.map((item) => (item.id === notification.id ? { ...item, read: true } : item))
+      );
+      setUnreadCount((prev) => Math.max(0, prev - 1));
+    } catch (error) {
+      console.warn('No se pudo marcar la notificación como leída:', error);
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  /** Botón "Marcar todas como leídas". */
+  const handleMarkAllAsRead = async () => {
+    try {
+      await markAllMyNotificationsAsRead();
+      setNotifications((prev) => prev.map((item) => ({ ...item, read: true })));
+      setUnreadCount(0);
+    } catch (error) {
+      console.warn('No se pudieron marcar todas las notificaciones como leídas:', error);
+    }
+  };
