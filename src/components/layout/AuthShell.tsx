@@ -49,7 +49,7 @@ export function AuthShell({
       <Navbar />
 
       <div className="pt-24 pb-16">
-        <div className="mx-auto max-w-md px-4 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-md px-5 sm:px-6 lg:px-8">
           <div className="mb-8 text-center app-animate-fade-up">
             <BrandMark className="justify-center" />
           </div>

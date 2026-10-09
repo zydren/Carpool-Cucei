@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 
 interface ModalProps {
   open: boolean;
@@ -26,6 +26,8 @@ const Modal = ({
   children,
   className = '',
 }: ModalProps) => {
+  const panelRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     if (!open) {
       return;
@@ -34,6 +36,24 @@ const Modal = ({
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         onClose();
+        return;
+      }
+      // Trampa de foco: al tabular, el foco no debe escapar del modal.
+      if (event.key === 'Tab' && panelRef.current) {
+        const focusables = panelRef.current.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])'
+        );
+        if (focusables.length === 0) return;
+        const first = focusables[0];
+        const last = focusables[focusables.length - 1];
+        const active = document.activeElement;
+        if (event.shiftKey && active === first) {
+          event.preventDefault();
+          last.focus();
+        } else if (!event.shiftKey && active === last) {
+          event.preventDefault();
+          first.focus();
+        }
       }
     };
 
@@ -41,20 +61,35 @@ const Modal = ({
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [open, onClose]);
 
+  // Mueve el foco al panel al abrir y lo devuelve al elemento previo al cerrar,
+  // para que la navegación por teclado y lectores de pantalla no se pierdan.
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    panelRef.current?.focus();
+    return () => {
+      previouslyFocused?.focus?.();
+    };
+  }, [open]);
+
   if (!open) {
     return null;
   }
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-[2px] app-animate-fade-up"
+      className="app-safe-top app-safe-bottom fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-[2px] app-animate-fade-up"
       role="dialog"
       aria-modal="true"
       aria-label={title}
       onClick={onClose}
     >
       <div
-        className={`w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-[0_24px_60px_rgba(15,23,42,0.25)] app-animate-pop ${className}`}
+        ref={panelRef}
+        tabIndex={-1}
+        className={`w-full max-w-lg max-h-[85vh] overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-[0_24px_60px_rgba(15,23,42,0.25)] outline-none app-animate-pop ${className}`}
         onClick={(e) => e.stopPropagation()}
       >
         {title && (

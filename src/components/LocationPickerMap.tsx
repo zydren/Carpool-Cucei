@@ -11,6 +11,20 @@ export interface MapPick {
   lng: number;
 }
 
+/**
+ * Punto intermedio (punto de paso) dibujado en el mapa con marcador
+ * numerado. Es solo referencia visual: no participa en la selección del
+ * origen ni dispara onPick.
+ */
+export interface WaypointMarker {
+  lat: number;
+  lng: number;
+  /** Número de visita mostrado en el marcador (1, 2, 3...). */
+  index: number;
+  /** Etiqueta legible aproximada del punto (o null si no hay dirección). */
+  label?: string | null;
+}
+
 /** Origen de un viaje disponible, dibujado en el mapa como referencia (●). */
 export interface TripOriginMarker {
   /** Id del viaje al que pertenece este origen. */
@@ -78,6 +92,12 @@ interface LocationPickerMapProps {
    * OfferTripPage). No participa en la selección ni dispara onPick.
    */
   destination?: MapPick | null;
+  /**
+   * Puntos intermedios (puntos de paso) ya elegidos por el conductor, con
+   * marcadores numerados diferenciados. Solo lectura: no modifican el
+   * origen, el destino ni disparan onPick.
+   */
+  waypoints?: WaypointMarker[];
   className?: string;
   style?: CSSProperties;
 }
@@ -123,6 +143,19 @@ const destinationIcon = L.divIcon({
   iconSize: [22, 22],
   iconAnchor: [11, 11],
 });
+
+/**
+ * Icono de punto intermedio (punto de paso): círculo ámbar numerado con el
+ * orden de visita, para diferenciarlo del origen (★ teal), de CUCEI (navy),
+ * de los viajes (● índigo) y de los puntos del pasajero (verde/ámbar).
+ */
+const waypointIcon = (visitNumber: number) =>
+  L.divIcon({
+    className: 'custom-marker',
+    html: `<div style="background-color: #D97706; width: 24px; height: 24px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; color: white; font-size: 12px; font-weight: 700; line-height: 1;">${visitNumber}</div>`,
+    iconSize: [24, 24],
+    iconAnchor: [12, 12],
+  });
 
 // Icono del punto de partida original del pasajero (verde)
 const passengerIcon = L.divIcon({
@@ -270,6 +303,7 @@ const LocationPickerMap = ({
   tripOrigins = [],
   onTripOriginClick,
   destination = null,
+  waypoints = [],
   routeGeometry = null,
   passengerOrigin = null,
   passengerLabel = 'Tu punto de partida',
@@ -324,6 +358,20 @@ const LocationPickerMap = ({
       {destination && (
         <Marker position={[destination.lat, destination.lng]} icon={destinationIcon} />
       )}
+      {/* Puntos intermedios (puntos de paso) con número de visita. El clic
+          en un marcador NO se propaga al mapa (Leaflet), así que nunca
+          disparan onPick ni alteran el origen. */}
+      {waypoints.map((waypoint) => (
+        <Marker
+          key={`waypoint-${waypoint.index}-${waypoint.lat},${waypoint.lng}`}
+          position={[waypoint.lat, waypoint.lng]}
+          icon={waypointIcon(waypoint.index)}
+        >
+          <Tooltip direction="top" offset={[0, -12]}>
+            {waypoint.label ?? `Punto de paso ${waypoint.index}`}
+          </Tooltip>
+        </Marker>
+      ))}
       {routePositions.length >= 2 && (
         <MapRouteLayer
           positions={routePositions}

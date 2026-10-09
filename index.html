@@ -3,7 +3,9 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- viewport-fit=cover permite usar las áreas seguras (env(safe-area-inset-*))
+         para no solapar el notch en móviles. La app añade el padding en CSS. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta
       name="description"
       content="Carpool Universitario: comparte y encuentra viajes hacia CUCEI con otros estudiantes."

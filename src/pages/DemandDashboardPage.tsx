@@ -393,7 +393,7 @@ const DemandDashboardPage = () => {
                     </p>
                   ) : (
                     <div className="overflow-x-auto">
-                      <table className="w-full text-left text-sm">
+                      <table className="w-full min-w-[560px] text-left text-sm">
                         <thead>
                           <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
                             <th className="py-2 pr-4 font-bold">Zona</th>

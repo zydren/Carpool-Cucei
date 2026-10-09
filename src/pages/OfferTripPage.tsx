@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+﻿import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
@@ -9,12 +9,20 @@ import { FormSection } from '../components/ui/PageBlocks';
 import { PageHeader } from '../components/layout/AppShell';
 import { getCurrentUser } from '../services/authService';
 import { searchAddress, reverseGeocode, type GeocodingResult } from '../services/geocodingService';
-import { calculateRoute, formatDistance, formatDuration, type RouteResult } from '../services/routingService';
+import {
+  calculateRoute,
+  buildWaypointRoute,
+  formatDistance,
+  formatDuration,
+  MAX_WAYPOINTS,
+  type RouteResult,
+  type StoredRouteWaypoint,
+} from '../services/routingService';
 import type { LineStringGeometry } from '../services/routingService';
 import { createTrip, type CreateTripParams } from '../services/tripService';
 import { getMyCars } from '../services/carService';
 import LocationPickerMap, { type MapPick } from '../components/LocationPickerMap';
-import { Car, CheckCircle2, Clock, MapPin, Route as RouteIcon, Ruler, Sparkles, ThumbsUp } from 'lucide-react';
+import { Car, CheckCircle2, Clock, MapPin, Plus, Route as RouteIcon, Ruler, Sparkles, ThumbsUp, X } from 'lucide-react';
 
 // Coordenadas de CUCEI (Centro Universitario de Ciencias Exactas e Ingenierías)
 const CUCEI_COORDS = {
@@ -64,6 +72,14 @@ const OfferTripPage = () => {
   const [isReverseGeocoding, setIsReverseGeocoding] = useState(false);
   /** Token anti-carrera: invalida respuestas (ruta o dirección) obsoletas. */
   const originActionRef = useRef(0);
+
+  // Estados para puntos de paso (intermedios). NO son paradas de pasajeros:
+  // no generan solicitudes ni modifican la capacidad del vehículo.
+  const [waypoints, setWaypoints] = useState<StoredRouteWaypoint[]>([]);
+  const [isWaypointMode, setIsWaypointMode] = useState(false);
+  const [waypointNotice, setWaypointNotice] = useState<string | null>(null);
+  /** true si la última optimización de orden falló (OSRM table no disponible) */
+  const [orderOptimizationSkipped, setOrderOptimizationSkipped] = useState(false);
 
   /**
    * Fuente única de verdad para el origen: el punto elegido en el mapa tiene
@@ -159,15 +175,35 @@ const OfferTripPage = () => {
     const isStale = () => token !== undefined && token !== originActionRef.current;
     setIsCalculatingRoute(true);
     try {
+      const origin = { lat, lng };
+      // Con puntos de paso, la ruta OSRM debe pasar por todos ellos y
+      // terminar en CUCEI. El orden puede ser optimizado por el servicio.
+      if (waypoints.length > 0) {
+        const result = await buildWaypointRoute(origin, waypoints, CUCEI_COORDS);
+        const route = result.route;
+        const skipped = !result.optimized && waypoints.length >= 2;
+        if (!isStale()) {
+          // Los marcadores muestran el orden de visita: alinear el estado con
+          // el orden habilitado por el cálculo.
+          setWaypoints(result.order.map((index) => waypoints[index]));
+          setRouteResult(route);
+          setRouteError(null);
+          setOrderOptimizationSkipped(skipped);
+        }
+        return;
+      }
       const route = await calculateRoute(lng, lat, CUCEI_COORDS.lng, CUCEI_COORDS.lat);
       if (!isStale()) {
         setRouteResult(route);
         setRouteError(null);
+        setOrderOptimizationSkipped(false);
       }
     } catch (error: unknown) {
       console.error('Error calculating route:', error);
       if (!isStale()) {
-        setRouteError('No pudimos calcular una ruta desde esa ubicación hasta CUCEI. Selecciona otra dirección.');
+        setRouteError(waypoints.length > 0
+          ? 'No pudimos calcular una ruta que pase por todos los puntos de paso hasta CUCEI. Revisa las coordenadas e inténtalo de nuevo.'
+          : 'No pudimos calcular una ruta desde esa ubicación hasta CUCEI. Selecciona otra dirección.');
         setRouteResult(null);
       }
     } finally {
@@ -192,6 +228,92 @@ const OfferTripPage = () => {
     // Calcular ruta hacia CUCEI (flujo existente)
     await recalculateRoute(parseFloat(result.lat), parseFloat(result.lon), action);
   };
+
+  /** Invalida ruta y cálculos en curso. Todo lo que depende de la ruta se vuelve
+      `null` para que el usuario lo recalcule desde una nueva acción. */
+  const invalidateRouteForWaypointChange = () => {
+    originActionRef.current += 1; // descarta respuestas de cálculos en curso
+    setIsCalculatingRoute(false);
+    setRouteResult(null);
+    setRouteError(null);
+    setOrderOptimizationSkipped(false);
+  };
+
+  /** Clicks del mapa según el modo: si el modo de puntos de paso está
+      activo, cada clic añade un punto de paso; si no, el clic define el
+      punto de salida (comportamiento original). */
+  const onMapPick = (pick: MapPick) => {
+    if (isWaypointMode) {
+      handleAddWaypoint(pick);
+      return;
+    }
+    handleMapPick(pick);
+  };
+
+  /** Agrega un punto de paso en el mapa definido por el usuario. */
+  const handleAddWaypoint = (pick: MapPick) => {
+    if (isCalculatingRoute) return;
+    if (waypoints.length >= MAX_WAYPOINTS) {
+      setWaypointNotice(`Máximo ${MAX_WAYPOINTS} puntos de paso. Ya no puedes añadir más.`);
+      return;
+    }
+    const isDuplicate = waypoints.some(
+      (w) => Math.abs(w.lat - pick.lat) < 1e-6 && Math.abs(w.lng - pick.lng) < 1e-6
+    );
+    if (isDuplicate) return;
+    setWaypointNotice(null);
+    const action = ++originActionRef.current;
+    const next: StoredRouteWaypoint = { lat: pick.lat, lng: pick.lng, address: null };
+    setWaypoints((prev) => [...prev, next]);
+    invalidateRouteForWaypointChange();
+    // Resuena la dirección (opcional, no bloquea el flujo).
+    void (async () => {
+      const address = await reverseGeocode(pick.lat, pick.lng);
+      if (action === originActionRef.current) {
+        setWaypoints((prev) =>
+          prev.map((w) =>
+            Math.abs(w.lat - pick.lat) < 1e-6 && Math.abs(w.lng - pick.lng) < 1e-6 ? { ...w, address } : w
+          )
+        );
+      }
+    })();
+  };
+
+  /** Elimina un punto de paso individual. */
+  const handleRemoveWaypoint = (index: number) => {
+    if (isCalculatingRoute || waypoints.length === 0) return;
+    invalidateRouteForWaypointChange();
+    setWaypoints((prev) => prev.filter((_, i) => i !== index));
+    setWaypointNotice(null);
+  };
+
+  /** Limpia todos los puntos de paso. */
+  const handleClearWaypoints = () => {
+    if (isCalculatingRoute || waypoints.length === 0) return;
+    invalidateRouteForWaypointChange();
+    setWaypoints([]);
+    setWaypointNotice(null);
+  };
+
+  /** Cambia el estado del modo de selección de puntos de paso. */
+  const handleToggleWaypointMode = () => {
+    if (isCalculatingRoute) return;
+    setIsWaypointMode((prev) => !prev);
+    setWaypointNotice(null);
+  };
+
+  /** Pídele al servicio que recalcule la ruta con los puntos de paso actuales. */
+  const handleManualRecalculate = () => {
+    if (!originPoint || isCalculatingRoute) return;
+    void recalculateRoute(originPoint.lat, originPoint.lng);
+  };
+
+  // --------------------------------- JSX ----------------------------------
+
+  // Texto del mapa indicando cómo interactuar según el modo activo.
+  const mapHint = isWaypointMode
+    ? `Haz clic en el mapa para agregar un punto de paso (máximo ${MAX_WAYPOINTS}).`
+    : 'Haz clic en el mapa para marcar tu punto de salida. También puedes buscar una dirección en el paso anterior.';
 
   /**
    * Selección del origen haciendo clic en el mapa (mismo patrón que en
@@ -233,8 +355,11 @@ const OfferTripPage = () => {
     void recalculateRoute(pick.lat, pick.lng, action);
   };
 
-  const validateForm = () => {
+  /** Blanco de validación con puntos de paso: una ruta incompleta no se
+      publica (evita guardar una ruta sin los puntos seleccionados). */
+  const validateFormWithWaypoints = () => {
     const newErrors: Record<string, string> = {};
+    const hasWaypoints = waypoints.length > 0;
 
     if (!originPoint) {
       newErrors.origin = 'Selecciona tu punto de salida en el mapa o usa "Buscar dirección"';
@@ -264,7 +389,10 @@ const OfferTripPage = () => {
       }
     }
 
-    if (!routeResult) {
+    if (hasWaypoints && !routeResult) {
+      newErrors.route =
+        'Calcula la ruta con tus puntos de paso antes de publicar (métrica + geometría)';
+    } else if (!routeResult) {
       newErrors.route = 'No se ha calculado la ruta correctamente';
     }
 
@@ -275,7 +403,7 @@ const OfferTripPage = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!validateForm()) {
+    if (!validateFormWithWaypoints()) {
       return;
     }
 
@@ -327,8 +455,12 @@ const OfferTripPage = () => {
       setMapPickAddress(null);
       setIsReverseGeocoding(false);
       setRouteResult(null);
+      setWaypoints([]);
+      setIsWaypointMode(false);
+      setOrderOptimizationSkipped(false);
+      setWaypointNotice(null);
       setAddressResults([]);
-
+      setErrors({});
       setTimeout(() => {
         setIsSubmitted(false);
         navigate('/');
@@ -530,20 +662,113 @@ const OfferTripPage = () => {
                           selected={originPoint}
                           selectedLabel={originPoint ? 'Mi punto de salida' : undefined}
                           focus={focusPoint}
-                          onPick={handleMapPick}
+                          onPick={onMapPick}
                           routeGeometry={routeResult?.geometry ?? null}
                           destination={{ lat: CUCEI_COORDS.lat, lng: CUCEI_COORDS.lng }}
+                          waypoints={waypoints.map((w, i) => ({
+                            lat: w.lat,
+                            lng: w.lng,
+                            index: i + 1,
+                            label: w.address ?? null,
+                          }))}
                           style={{ height: '100%', width: '100%' }}
                         />
                       </div>
 
                       <p className="mb-4 flex items-start gap-1.5 text-xs text-slate-500">
                         <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                        <span>
-                          Haz clic en el mapa para marcar tu punto de salida. También puedes
-                          buscar una dirección en el paso anterior.
-                        </span>
+                        <span>{mapHint}</span>
                       </p>
+
+                      {/* Modo de puntos de paso: el conductor puede marcar
+                          paradas intermedias que la ruta debe recorrer. No son
+                          paradas de pasajeros: no cambian la capacidad. */}
+                      <div className="mb-4 flex flex-wrap items-center gap-2">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant={isWaypointMode ? 'primary' : 'outline'}
+                          onClick={handleToggleWaypointMode}
+                          disabled={isCalculatingRoute}
+                        >
+                          <Plus className="h-4 w-4" aria-hidden="true" />
+                          {isWaypointMode ? 'Cancelar punto de paso' : 'Agregar punto de paso'}
+                        </Button>
+
+                        {waypoints.length > 0 && (
+                          <>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              onClick={handleClearWaypoints}
+                              disabled={isCalculatingRoute}
+                            >
+                              Limpiar todo
+                            </Button>
+                            <span className="text-xs text-slate-500">
+                              {waypoints.length}/{MAX_WAYPOINTS} puntos
+                            </span>
+                          </>
+                        )}
+                      </div>
+
+                      {isWaypointMode && (
+                        <p className="mb-4 flex items-center gap-1.5 text-xs font-semibold text-teal-700">
+                          <MapPin className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                          Modo activo: haz clic en el mapa para colocar cada punto.
+                        </p>
+                      )}
+
+                      {waypointNotice && (
+                        <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+                          {waypointNotice}
+                        </p>
+                      )}
+
+                      {waypoints.length > 0 && (
+                        <ul className="mb-4 space-y-2">
+                          {waypoints.map((w, i) => (
+                            <li
+                              key={`${w.lat}-${w.lng}`}
+                              className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
+                            >
+                              <span className="flex min-w-0 items-center gap-2">
+                                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-teal-700 text-[11px] font-bold text-white">
+                                  {i + 1}
+                                </span>
+                                <span className="truncate text-slate-700">
+                                  {w.address
+                                    ? formatAddressForDisplay(w.address)
+                                    : `Lat ${w.lat.toFixed(4)} · Lng ${w.lng.toFixed(4)}`}
+                                </span>
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveWaypoint(i)}
+                                disabled={isCalculatingRoute}
+                                className="shrink-0 rounded-md p-1 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
+                                aria-label={`Eliminar punto de paso ${i + 1}`}
+                              >
+                                <X className="h-4 w-4" aria-hidden="true" />
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+
+                      {waypoints.length > 0 && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="secondary"
+                          onClick={handleManualRecalculate}
+                          disabled={!originPoint || isCalculatingRoute}
+                        >
+                          <RouteIcon className="h-4 w-4" aria-hidden="true" />
+                          Recalcular ruta
+                        </Button>
+                      )}
 
                       {originPoint ? (
                         <div>
@@ -576,6 +801,14 @@ const OfferTripPage = () => {
                                   </p>
                                 </div>
                               </div>
+                              {waypoints.length >= 2 && orderOptimizationSkipped && (
+                                <p className="text-xs text-amber-700">
+                                  <Sparkles className="h-3.5 w-3.5 inline mr-1" aria-hidden="true" />
+                                  No fue posible optimizar el orden (servicio de
+                                  matriz de OSRM no disponible). Se conserva tu
+                                  orden de selección.
+                                </p>
+                              )}
                             </div>
                           )}
 

@@ -821,7 +821,7 @@ const MyTripsPage = () => {
                 const canReviewRequests = lifecycle === 'scheduled';
 
                 return (
-                  <Card key={trip.id} className="p-5 sm:p-6 app-animate-fade-up">
+                  <Card key={trip.id} className="p-6 sm:p-7 app-animate-fade-up">
                     <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
                       <div className="min-w-0 flex-1">
                         {/* Ruta con jerarquía origen → destino */}
@@ -1443,7 +1443,7 @@ const MyTripsPage = () => {
               </div>
             )}
 
-            <div className="mt-6 flex justify-end gap-3">
+            <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
               <Button
                 type="button"
                 variant="outline"

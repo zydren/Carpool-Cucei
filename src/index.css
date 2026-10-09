@@ -19,6 +19,32 @@ body {
   background-color: rgba(20, 184, 166, 0.25);
 }
 
+/* Evita el desbordamiento horizontal accidental en toda la app (imágenes anchas,
+   tablas, mapas). No recorta contenido porque cada pieza controla su propio scroll. */
+html,
+body {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+/* Salto con ancla sin quedar tapado por la barra fija superior (navbar ~4rem).
+   Aplica a cualquier elemento con id al que se navegue con #ancla. */
+:where(section, div[id], [id]) {
+  scroll-margin-top: 5.5rem;
+}
+
+/* Áreas seguras en móviles con notch (requiere viewport-fit=cover en el <meta>).
+   Se respetan en el navbar fijo y el pie para que nada quede bajo el notch. */
+@supports (padding: env(safe-area-inset-top)) {
+  .app-safe-top {
+    padding-top: env(safe-area-inset-top);
+  }
+
+  .app-safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+
 /* Animaciones sutiles de UI */
 @keyframes app-fade-up {
   from {

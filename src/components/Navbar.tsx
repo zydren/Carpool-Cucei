@@ -92,7 +92,7 @@ const Navbar = () => {
   // Nota: location.pathname se lee en cada render para `isActive`, sin efectos.
 
   return (
-    <nav className="bg-slate-900 text-white shadow-[0_1px_0_rgba(255,255,255,0.06)] fixed w-full top-0 z-50">
+    <nav className="app-safe-top bg-slate-900 text-white shadow-[0_1px_0_rgba(255,255,255,0.06)] fixed w-full top-0 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between gap-4 h-16">
           <div className="flex items-center flex-shrink-0 min-w-0">
@@ -249,7 +249,7 @@ const Navbar = () => {
             )}
             <button
               onClick={() => setIsMenuOpen(!isMenuOpen)}
-              className="text-slate-200 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 rounded-md p-1"
+              className="text-slate-200 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 rounded-md p-2"
               aria-label={isMenuOpen ? 'Cerrar menú' : 'Abrir menú'}
               aria-expanded={isMenuOpen}
             >
@@ -267,10 +267,10 @@ const Navbar = () => {
 
       {isMenuOpen && (
         <div className="md:hidden overflow-x-hidden bg-slate-900 border-t border-white/10">
-          <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3 max-w-full">
+          <div className="px-3 pt-3 pb-4 space-y-1.5 sm:px-3 max-w-full">
             <Link 
               to="/" 
-              className={`block px-3 py-2 rounded-lg text-base font-medium ${
+              className={`block px-4 py-3 rounded-xl text-base font-medium ${
                 isActive('/') ? 'text-slate-950 bg-teal-500' : 'text-slate-200 hover:text-white hover:bg-white/10'
               }`}
               onClick={() => setIsMenuOpen(false)}
@@ -279,7 +279,7 @@ const Navbar = () => {
             </Link>
             <Link 
               to="/como-funciona" 
-              className={`block px-3 py-2 rounded-lg text-base font-medium ${
+              className={`block px-4 py-3 rounded-xl text-base font-medium ${
                 isActive('/como-funciona') ? 'text-slate-950 bg-teal-500' : 'text-slate-200 hover:text-white hover:bg-white/10'
               }`}
               onClick={() => setIsMenuOpen(false)}
@@ -288,7 +288,7 @@ const Navbar = () => {
             </Link>
             <Link 
               to="/seguridad" 
-              className={`block px-3 py-2 rounded-lg text-base font-medium ${
+              className={`block px-4 py-3 rounded-xl text-base font-medium ${
                 isActive('/seguridad') ? 'text-slate-950 bg-teal-500' : 'text-slate-200 hover:text-white hover:bg-white/10'
               }`}
               onClick={() => setIsMenuOpen(false)}
@@ -297,7 +297,7 @@ const Navbar = () => {
             </Link>
             <Link 
               to="/preguntas-frecuentes" 
-              className={`block px-3 py-2 rounded-lg text-base font-medium ${
+              className={`block px-4 py-3 rounded-xl text-base font-medium ${
                 isActive('/preguntas-frecuentes') ? 'text-slate-950 bg-teal-500' : 'text-slate-200 hover:text-white hover:bg-white/10'
               }`}
               onClick={() => setIsMenuOpen(false)}
@@ -306,7 +306,7 @@ const Navbar = () => {
             </Link>
             <Link 
               to="/contacto" 
-              className={`block px-3 py-2 rounded-lg text-base font-medium ${
+              className={`block px-4 py-3 rounded-xl text-base font-medium ${
                 isActive('/contacto') ? 'text-slate-950 bg-teal-500' : 'text-slate-200 hover:text-white hover:bg-white/10'
               }`}
               onClick={() => setIsMenuOpen(false)}
@@ -315,14 +315,14 @@ const Navbar = () => {
             </Link>
             <Link 
               to="/buscar-viaje" 
-              className="w-full text-left bg-white text-slate-950 hover:bg-teal-500 block px-3 py-2 rounded-lg text-base font-semibold mt-2"
+              className="w-full text-left bg-white text-slate-950 hover:bg-teal-500 block px-4 py-3 rounded-xl text-base font-semibold mt-2"
               onClick={() => setIsMenuOpen(false)}
             >
               Buscar viaje
             </Link>
             <Link 
               to="/ofrecer-viaje" 
-              className="w-full text-left bg-transparent border border-white/30 text-white hover:bg-white/10 block px-3 py-2 rounded-lg text-base font-semibold mt-2"
+              className="w-full text-left bg-transparent border border-white/30 text-white hover:bg-white/10 block px-4 py-3 rounded-xl text-base font-semibold mt-2"
               onClick={() => setIsMenuOpen(false)}
             >
               Ofrecer viaje
@@ -330,7 +330,7 @@ const Navbar = () => {
             {user && (
               <Link 
                 to="/mis-viajes" 
-                className={`w-full text-left block px-3 py-2 rounded-lg text-base font-medium ${
+                className={`w-full text-left block px-4 py-3 rounded-xl text-base font-medium ${
                   isActive('/mis-viajes') ? 'text-slate-950 bg-teal-500' : 'text-slate-200 hover:text-white hover:bg-white/10'
                 }`}
                 onClick={() => setIsMenuOpen(false)}
@@ -341,7 +341,7 @@ const Navbar = () => {
             {user && (
               <Link
                 to="/registrar-auto"
-                className={`w-full text-left block px-3 py-2 rounded-lg text-base font-medium ${
+                className={`w-full text-left block px-4 py-3 rounded-xl text-base font-medium ${
                   isActive('/registrar-auto') ? 'text-slate-950 bg-teal-500' : 'text-slate-200 hover:text-white hover:bg-white/10'
                 }`}
                 onClick={() => setIsMenuOpen(false)}
@@ -352,7 +352,7 @@ const Navbar = () => {
             {user && (
               <Link
                 to="/analitica"
-                className={`w-full text-left block px-3 py-2 rounded-lg text-base font-medium ${
+                className={`w-full text-left block px-4 py-3 rounded-xl text-base font-medium ${
                   isActive('/analitica') ? 'text-slate-950 bg-teal-500' : 'text-slate-200 hover:text-white hover:bg-white/10'
                 }`}
                 onClick={() => setIsMenuOpen(false)}
@@ -374,7 +374,7 @@ const Navbar = () => {
                   </Link>
                   <Link
                     to="/perfil"
-                    className={`block px-3 py-2 rounded-lg text-base font-medium ${
+                    className={`block px-4 py-3 rounded-xl text-base font-medium ${
                       isActive('/perfil') ? 'text-slate-950 bg-teal-500' : 'text-slate-200 hover:text-white hover:bg-white/10'
                     }`}
                     onClick={() => setIsMenuOpen(false)}
@@ -403,7 +403,7 @@ const Navbar = () => {
                 </Link>
                 <Link 
                   to="/registro" 
-                  className="w-full text-left bg-teal-500 text-slate-950 hover:bg-teal-400 block px-3 py-2 rounded-lg text-base font-semibold mt-2"
+                  className="w-full text-left bg-teal-500 text-slate-950 hover:bg-teal-400 block px-4 py-3 rounded-xl text-base font-semibold mt-2"
                   onClick={() => setIsMenuOpen(false)}
                 >
                   Registrarse
