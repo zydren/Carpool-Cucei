@@ -2,7 +2,7 @@ import { forwardRef } from 'react';
 import type { ButtonHTMLAttributes } from 'react';
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger';
+  variant?: 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger' | 'accent';
   size?: 'sm' | 'md' | 'lg';
   fullWidth?: boolean;
 }
@@ -17,14 +17,16 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     ...props 
   }, ref) => {
     // inline-flex + gap mantiene alineados los iconos y el texto de los botones.
-    const baseStyles = 'inline-flex items-center justify-center gap-2 font-medium rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2';
+    const baseStyles =
+      'inline-flex items-center justify-center gap-2 font-semibold rounded-xl transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-teal-500 disabled:opacity-60 disabled:cursor-not-allowed active:scale-[0.99]';
     
     const variantStyles = {
-      primary: 'bg-indigo-600 text-white hover:bg-indigo-700 focus:ring-indigo-500',
-      secondary: 'bg-gray-600 text-white hover:bg-gray-700 focus:ring-gray-500',
-      outline: 'bg-transparent border-2 border-indigo-600 text-indigo-600 hover:bg-indigo-50 focus:ring-indigo-500',
-      ghost: 'bg-transparent text-gray-700 hover:bg-gray-100 focus:ring-gray-500',
-      danger: 'bg-red-600 text-white hover:bg-red-700 focus:ring-red-500',
+      primary: 'bg-slate-900 text-white hover:bg-slate-800 focus-visible:ring-slate-900 shadow-[0_1px_2px_rgba(15,23,42,0.2)]',
+      secondary: 'bg-teal-700 text-white hover:bg-teal-800 focus-visible:ring-teal-600',
+      outline: 'bg-white border border-slate-300 text-slate-900 hover:border-teal-600 hover:text-teal-800 hover:bg-teal-50 focus-visible:ring-teal-500',
+      ghost: 'bg-transparent text-slate-700 hover:bg-slate-100 focus-visible:ring-slate-400',
+      danger: 'bg-red-600 text-white hover:bg-red-700 focus-visible:ring-red-500',
+      accent: 'bg-teal-500 text-slate-950 hover:bg-teal-400 focus-visible:ring-teal-500',
     };
     
     const sizeStyles = {

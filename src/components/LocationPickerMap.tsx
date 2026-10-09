@@ -11,6 +11,18 @@ export interface MapPick {
   lng: number;
 }
 
+/** Origen de un viaje disponible, dibujado en el mapa como referencia (●). */
+export interface TripOriginMarker {
+  /** Id del viaje al que pertenece este origen. */
+  id: string;
+  lat: number;
+  lng: number;
+  /** Etiqueta mostrada al pasar el cursor (por ejemplo, el nombre del origen). */
+  label?: string;
+  /** true cuando el viaje es el actualmente seleccionado (se resalta con anillo). */
+  highlighted?: boolean;
+}
+
 interface LocationPickerMapProps {
   /** Latitud del centro inicial del mapa. */
   centerLat: number;
@@ -48,6 +60,24 @@ interface LocationPickerMapProps {
   pickupPoint?: MapPick | null;
   /** Etiqueta del marcador del punto de recogida (opcional). */
   pickupLabel?: string;
+  /**
+   * Etiqueta permanente junto al punto seleccionado por el usuario
+   * (por ejemplo, "Mi punto de salida"). Si no se pasa, el marcador
+   * conserva su aspecto actual.
+   */
+  selectedLabel?: string;
+  /**
+   * Orígenes de los viajes disponibles que se muestran como referencia (●).
+   * No participan en la selección del origen del usuario.
+   */
+  tripOrigins?: TripOriginMarker[];
+  /** Se llama con el id de un viaje cuando se hace clic en su origen (●). */
+  onTripOriginClick?: (id: string) => void;
+  /**
+   * Destino fijo dibujado como referencia (por ejemplo, CUCEI en
+   * OfferTripPage). No participa en la selección ni dispara onPick.
+   */
+  destination?: MapPick | null;
   className?: string;
   style?: CSSProperties;
 }
@@ -55,9 +85,43 @@ interface LocationPickerMapProps {
 // Icono del marcador de búsqueda (mismo estilo que el usado en OfferTripPage)
 const pickIcon = L.divIcon({
   className: 'custom-marker',
-  html: '<div style="background-color: #4F46E5; width: 24px; height: 24px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);"></div>',
+  html: '<div style="background-color: #0F766E; width: 24px; height: 24px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);"></div>',
   iconSize: [24, 24],
   iconAnchor: [12, 12],
+});
+
+// Icono de "Mi punto de salida" (★): solo cuando la página etiqueta el punto
+// del usuario, para diferenciarlo claramente de los orígenes de los viajes (●).
+const myOriginIcon = L.divIcon({
+  className: 'custom-marker',
+  html: '<div style="background-color: #0F766E; width: 28px; height: 28px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 6px rgba(0,0,0,0.35); display: flex; align-items: center; justify-content: center; color: white; font-size: 14px; line-height: 1;">★</div>',
+  iconSize: [28, 28],
+  iconAnchor: [14, 14],
+});
+
+// Icono del origen de un viaje disponible (● índigo: conductor, no pasajero)
+const tripOriginIcon = L.divIcon({
+  className: 'custom-marker',
+  html: '<div style="background-color: #4F46E5; width: 18px; height: 18px; border-radius: 50%; border: 2px solid white; box-shadow: 0 1px 3px rgba(0,0,0,0.3);"></div>',
+  iconSize: [18, 18],
+  iconAnchor: [9, 9],
+});
+
+// Origen del viaje actualmente seleccionado (mismo ● índigo, con anillo)
+const tripOriginHighlightedIcon = L.divIcon({
+  className: 'custom-marker',
+  html: '<div style="background-color: #4F46E5; width: 20px; height: 20px; border-radius: 50%; border: 2px solid white; box-shadow: 0 0 0 4px rgba(79,70,229,0.35), 0 1px 3px rgba(0,0,0,0.3);"></div>',
+  iconSize: [20, 20],
+  iconAnchor: [10, 10],
+});
+
+// Icono del destino fijo del viaje (CUCEI en OfferTripPage): círculo navy
+// para diferenciarlo del ★ teal del origen y de los ● índigo de los viajes.
+const destinationIcon = L.divIcon({
+  className: 'custom-marker',
+  html: '<div style="background-color: #0F172A; width: 22px; height: 22px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);"></div>',
+  iconSize: [22, 22],
+  iconAnchor: [11, 11],
 });
 
 // Icono del punto de partida original del pasajero (verde)
@@ -77,7 +141,7 @@ const pickupIcon = L.divIcon({
 });
 
 // Colores compartidos entre la polilínea y la leyenda de la página.
-const ROUTE_COLOR = '#4F46E5';
+const ROUTE_COLOR = '#0F766E';
 const CONNECTOR_COLOR = '#F59E0B';
 
 /**
@@ -200,8 +264,12 @@ const LocationPickerMap = ({
   centerLng,
   zoom = 12,
   selected = null,
+  selectedLabel,
   focus = null,
   onPick,
+  tripOrigins = [],
+  onTripOriginClick,
+  destination = null,
   routeGeometry = null,
   passengerOrigin = null,
   passengerLabel = 'Tu punto de partida',
@@ -225,7 +293,37 @@ const LocationPickerMap = ({
       />
       {onPick && <MapClickHandler onPick={(lat, lng) => onPick({ lat, lng })} />}
       <MapFocus point={focus} />
-      {selected && <Marker position={[selected.lat, selected.lng]} icon={pickIcon} />}
+      {selected && (
+        <Marker
+          position={[selected.lat, selected.lng]}
+          icon={selectedLabel ? myOriginIcon : pickIcon}
+        >
+          {selectedLabel && (
+            <Tooltip permanent direction="top" offset={[0, -14]}>
+              {selectedLabel}
+            </Tooltip>
+          )}
+        </Marker>
+      )}
+      {/* Orígenes de los viajes (●): el clic resalta el viaje, pero nunca fija
+          el origen del usuario (en Leaflet los marcadores no propagan el clic
+          al mapa, así que no disparan onPick). */}
+      {tripOrigins.map((origin) => (
+        <Marker
+          key={origin.id}
+          position={[origin.lat, origin.lng]}
+          icon={origin.highlighted ? tripOriginHighlightedIcon : tripOriginIcon}
+          eventHandlers={{
+            click: () => onTripOriginClick?.(origin.id),
+          }}
+        >
+          {origin.label && <Tooltip direction="top">{origin.label}</Tooltip>}
+        </Marker>
+      ))}
+      {/* Destino fijo (si la página lo pasa): solo referencia visual. */}
+      {destination && (
+        <Marker position={[destination.lat, destination.lng]} icon={destinationIcon} />
+      )}
       {routePositions.length >= 2 && (
         <MapRouteLayer
           positions={routePositions}

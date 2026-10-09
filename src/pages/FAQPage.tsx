@@ -15,7 +15,7 @@ const FAQPage = () => {
   const faqs: FAQItem[] = [
     {
       question: '¿Qué es Carpool Universitario?',
-      answer: 'Carpool Universitario es una plataforma de carpool diseñada exclusivamente para estudiantes universitarios. Conecta a conductores que tienen espacios disponibles en sus vehículos con pasajeros que necesitan transporte, permitiendo compartir gastos de viaje de manera segura y económica.',
+      answer: 'Carpool Universitario es una plataforma de carpool diseñada exclusivamente para estudiantes universitarios. Conecta a conductores que tienen espacios disponibles en sus vehículos con pasajeros que necesitan transporte, permitiendo compartir el trayecto de manera segura y gratuita.',
     },
     {
       question: '¿Quién puede utilizar la plataforma?',
@@ -27,11 +27,11 @@ const FAQPage = () => {
     },
     {
       question: '¿Cómo puedo ofrecer un viaje?',
-      answer: 'Para ofrecer un viaje, ve a la sección "Ofrecer viaje" y completa la información del viaje: origen, destino, fecha, hora, número de lugares disponibles y el costo estimado por pasajero. Una vez publicado, otros estudiantes podrán ver tu viaje y solicitar unirse.',
+      answer: 'Para ofrecer un viaje, ve a la sección "Ofrecer viaje" y completa la información del viaje: origen, destino, fecha, hora y número de lugares disponibles. Una vez publicado, otros estudiantes podrán ver tu viaje y solicitar unirse.',
     },
     {
       question: '¿Tiene algún costo utilizar la plataforma?',
-      answer: 'El uso de la plataforma es gratuito para estudiantes. Los únicos costos son los que se acuerden entre conductor y pasajeros para cubrir gastos como combustible, peajes y estacionamiento. Estos costos se dividen equitativamente entre todos los ocupantes del vehículo.',
+      answer: 'El uso de la plataforma es gratuito para estudiantes. Los viajes publicados también son gratuitos: no hay pagos ni cobros entre conductores y pasajeros.',
     },
     {
       question: '¿Cómo funcionan las solicitudes?',
@@ -60,16 +60,16 @@ const FAQPage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-slate-50">
       <Navbar />
       
       <div className="pt-24 pb-16">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
-            <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4">
+            <h1 className="text-4xl md:text-5xl font-bold text-slate-900 mb-4">
               Preguntas Frecuentes
             </h1>
-            <p className="text-xl text-gray-600">
+            <p className="text-xl text-slate-600">
               Encuentra respuestas a las preguntas más comunes sobre Carpool Universitario.
             </p>
           </div>
@@ -81,11 +81,11 @@ const FAQPage = () => {
                   onClick={() => toggleFAQ(index)}
                   className="w-full px-6 py-4 text-left flex items-center justify-between focus:outline-none"
                 >
-                  <span className="text-lg font-semibold text-gray-900 pr-4">
+                  <span className="text-lg font-semibold text-slate-900 pr-4">
                     {faq.question}
                   </span>
                   <svg
-                    className={`w-5 h-5 text-indigo-600 flex-shrink-0 transition-transform duration-200 ${
+                    className={`w-5 h-5 text-teal-700 flex-shrink-0 transition-transform duration-200 ${
                       openIndex === index ? 'rotate-180' : ''
                     }`}
                     fill="none"
@@ -102,7 +102,7 @@ const FAQPage = () => {
                 </button>
                 {openIndex === index && (
                   <div className="px-6 pb-4">
-                    <p className="text-gray-600 leading-relaxed">
+                    <p className="text-slate-600 leading-relaxed">
                       {faq.answer}
                     </p>
                   </div>
@@ -112,16 +112,16 @@ const FAQPage = () => {
           </div>
 
           <div className="mt-12 text-center">
-            <Card className="p-8 bg-gradient-to-r from-indigo-50 to-purple-50">
-              <h3 className="text-xl font-semibold text-gray-900 mb-2">
+            <Card className="p-8 bg-gradient-to-r from-slate-50 to-teal-500/10">
+              <h3 className="text-xl font-semibold text-slate-900 mb-2">
                 ¿No encontraste tu respuesta?
               </h3>
-              <p className="text-gray-600 mb-4">
+              <p className="text-slate-600 mb-4">
                 Estamos aquí para ayudarte. Contáctanos directamente.
               </p>
               <Link
                 to="/contacto"
-                className="inline-block bg-indigo-600 text-white hover:bg-indigo-700 font-medium py-2 px-6 rounded-lg transition-colors"
+                className="inline-block bg-slate-900 text-white hover:bg-slate-800 font-medium py-2 px-6 rounded-lg transition-colors"
               >
                 Ir a Contacto
               </Link>

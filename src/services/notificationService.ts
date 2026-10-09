@@ -1,18 +1,20 @@
 import { supabase } from '../lib/supabase';
 
 /**
- * Tipos de notificación que generan los triggers de la base de datos
- * (ver supabase/migrations/add_notifications.sql).
+ * Tipos de notificación que generan los triggers/RPC de la base de datos
+ * (ver supabase/migrations/add_notifications.sql y
+ * supabase/migrations/add_trip_completion.sql).
  *
  * El frontend NUNCA crea notificaciones: solo las lee, las marca como leídas
- * (o las elimina). La inserción es exclusiva de los triggers SECURITY DEFINER
- * sobre trip_requests, así que no existe permiso INSERT para la API.
+ * (o las elimina). La inserción es exclusiva de los triggers y de los RPC
+ * SECURITY DEFINER, así que no existe permiso INSERT para la API.
  */
 export type NotificationType =
   | 'request_created'
   | 'request_accepted'
   | 'request_rejected'
-  | 'request_cancelled';
+  | 'request_cancelled'
+  | 'trip_completed';
 
 export interface AppNotification {
   id: string;
@@ -39,6 +41,9 @@ export const notificationTargetPath: Record<NotificationType, string> = {
   request_accepted: '/mis-viajes?tab=passenger',
   request_rejected: '/mis-viajes?tab=passenger',
   request_cancelled: '/mis-viajes?tab=driver',
+  // El viaje finalizado es relevante para conductor y pasajeros; la notificación
+  // la reciben ambos y "Mis viajes" muestra el estado en las dos pestañas.
+  trip_completed: '/mis-viajes',
 };
 
 /**

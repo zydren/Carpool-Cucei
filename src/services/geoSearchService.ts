@@ -2,6 +2,7 @@
   fetchTripsForSearch,
   mapTripFromDBToTrip,
   distancePointToRouteKm,
+  isTripAvailableForSearch,
 } from './tripService';
 import type {
   Trip,
@@ -176,8 +177,15 @@ export const searchTripsByLocation = async (
     Number.isFinite(params.originLatitude) &&
     Number.isFinite(params.originLongitude);
 
-  // Viajes activos con los filtros de destino/fecha (sin filtro SQL de origen)
-  const items = await fetchTripsForSearch(params);
+  // Viajes publicados con los filtros de destino/fecha (sin filtro SQL de
+  // origen). La consulta a Supabase ya excluye estados distintos de
+  // 'active', viajes sin lugares y salidas cuya fecha/hora ya pasó; este
+  // filtro en cliente es una DEFENSA ADICIONAL (no la única regla) para no
+  // mostrar viajes ya salidos aunque la respuesta llegue incompleta.
+  const fetchedItems = await fetchTripsForSearch(params);
+  const items = fetchedItems.filter((item) =>
+    isTripAvailableForSearch(item, item.seats_available)
+  );
 
   if (DEBUG_SEARCH_LOGS) {
     console.log('[geoSearch][diagnóstico] searchTripsByLocation', {
@@ -186,7 +194,8 @@ export const searchTripsByLocation = async (
       originLongitude: params.originLongitude ?? null,
       date: params.date ?? null,
       hasSearchPoint,
-      'trips returned by fetchTripsForSearch': items.length,
+      'trips returned by fetchTripsForSearch': fetchedItems.length,
+      'trips discarded as past / no seats': fetchedItems.length - items.length,
     });
   }
 
@@ -303,13 +312,20 @@ export const searchTripsByLocation = async (
  *          matchType 'all' (sin distancias de coincidencia).
  */
 export const getAllPublishedTrips = async (): Promise<TripSearchResult[]> => {
-  // Sin params: fetchTripsForSearch no aplica filtros de destino/fecha.
-  const items = await fetchTripsForSearch({});
+  // Sin params: fetchTripsForSearch no aplica filtros de destino/fecha, pero
+  // SÍ aplica la regla de disponibilidad (status 'active', con lugares y
+  // salida aún no pasada). El filtro de cliente siguiente es solo defensa.
+  const fetchedItems = await fetchTripsForSearch({});
+  const items = fetchedItems.filter((item) =>
+    isTripAvailableForSearch(item, item.seats_available)
+  );
 
   if (DEBUG_SEARCH_LOGS) {
     console.log(
       '[geoSearch][diagnóstico] getAllPublishedTrips ("ver todos los viajes") -> filas de la BD: ' +
-        items.length
+        fetchedItems.length +
+        ' | descartadas por pasado/sin lugares: ' +
+        (fetchedItems.length - items.length)
     );
   }
 

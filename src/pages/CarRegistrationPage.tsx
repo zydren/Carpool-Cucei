@@ -5,6 +5,8 @@ import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
+import { EmptyState } from '../components/ui/PageBlocks';
+import { PageHeader } from '../components/layout/AppShell';
 import { FormField } from '../components/ui/FormField';
 import { getCurrentUser } from '../services/authService';
 import {
@@ -271,32 +273,29 @@ const CarRegistrationPage = () => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Cargando tus autos...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-slate-300 mx-auto mb-4"></div>
+          <p className="text-slate-600">Cargando tus autos...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-slate-50">
       <Navbar />
 
       <div className="pt-24 pb-16">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-8">
-            <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-2">
-              Mi Auto
-            </h1>
-            <p className="text-xl text-gray-600">
-              Registra tu vehículo y los datos de tu seguro para poder ofrecer viajes.
-            </p>
-          </div>
+          <PageHeader
+            eyebrow="Vehículo"
+            title="Mi auto"
+            description="Registra tu vehículo y los datos de tu seguro para poder ofrecer viajes."
+          />
 
           <Card className="p-8">
-            <h2 className="text-2xl font-bold text-gray-900 mb-6">
+            <h2 className="text-2xl font-bold text-slate-900 mb-6">
               {editingCarId ? 'Editar auto' : 'Registrar auto'}
             </h2>
 
@@ -395,21 +394,21 @@ const CarRegistrationPage = () => {
               {/* SENTINEL-JSX1 */}
 
               <div className="mb-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-3">
+                <h3 className="text-lg font-semibold text-slate-900 mb-3">
                   Documentos del seguro
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label className="block text-sm font-medium text-slate-700 mb-2">
                       Foto de la cobertura
                     </label>
                     <input
                       type="file"
                       accept="image/*"
                       onChange={handlePhotoChange('coverage')}
-                      className="block w-full text-sm text-gray-500"
+                      className="block w-full text-sm text-slate-500"
                     />
-                    <p className="mt-1 text-xs text-gray-500">
+                    <p className="mt-1 text-xs text-slate-500">
                       Sube una foto clara de la cobertura de tu seguro.
                     </p>
                     {coveragePreview && (
@@ -421,16 +420,16 @@ const CarRegistrationPage = () => {
                     )}
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label className="block text-sm font-medium text-slate-700 mb-2">
                       Foto de la póliza
                     </label>
                     <input
                       type="file"
                       accept="image/*"
                       onChange={handlePhotoChange('policy')}
-                      className="block w-full text-sm text-gray-500"
+                      className="block w-full text-sm text-slate-500"
                     />
-                    <p className="mt-1 text-xs text-gray-500">
+                    <p className="mt-1 text-xs text-slate-500">
                       Sube una foto de tu póliza vigente.
                     </p>
                     {policyPreview && (
@@ -471,30 +470,27 @@ const CarRegistrationPage = () => {
           {/* SENTINEL-JSX2 */}
 
           <div className="mt-8">
-            <h2 className="text-2xl font-bold text-gray-900 mb-4">
+            <h2 className="text-2xl font-bold text-slate-900 mb-4">
               Mis autos ({cars.length})
             </h2>
 
             {cars.length === 0 ? (
-              <Card className="p-8 text-center">
-                <p className="mb-2">
-                  <CarIcon className="w-10 h-10 mx-auto text-gray-400" aria-hidden="true" />
-                </p>
-                <p className="text-gray-600">
-                  Aún no tienes autos registrados. Registra uno para poder ofrecer viajes.
-                </p>
-              </Card>
+              <EmptyState
+                icon={CarIcon}
+                title="Aún no tienes autos registrados"
+                description="Registra tu auto con los datos del seguro para poder ofrecer viajes a otros estudiantes."
+              />
             ) : (
               <div className="space-y-4">
                 {cars.map((car) => (
                   <Card key={car.id} className="p-5">
                     <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
                       <div className="flex-1">
-                        <h3 className="text-lg font-bold text-gray-900">
+                        <h3 className="text-lg font-bold text-slate-900">
                           {car.brand} {car.model}{' '}
-                          <span className="text-sm text-gray-500">({car.year})</span>
+                          <span className="text-sm text-slate-500">({car.year})</span>
                         </h3>
-                        <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600 mt-1">
+                        <div className="flex flex-wrap items-center gap-4 text-sm text-slate-600 mt-1">
                           <span className="inline-flex items-center gap-1.5">
                             <Palette className="w-4 h-4" aria-hidden="true" />
                             {car.color}
@@ -508,7 +504,7 @@ const CarRegistrationPage = () => {
                             {car.seats} asientos
                           </span>
                         </div>
-                        <p className="text-sm text-gray-600 mt-1 flex items-center gap-1.5">
+                        <p className="text-sm text-slate-600 mt-1 flex items-center gap-1.5">
                           <ShieldCheck className="w-4 h-4" aria-hidden="true" />
                           {car.insurance_company} · Póliza {car.insurance_policy_number}
                         </p>
@@ -518,7 +514,7 @@ const CarRegistrationPage = () => {
                               href={car.coverage_photo_url}
                               target="_blank"
                               rel="noreferrer"
-                              className="text-xs text-indigo-600 underline"
+                              className="text-xs text-teal-700 underline"
                             >
                               Ver cobertura
                             </a>
@@ -528,7 +524,7 @@ const CarRegistrationPage = () => {
                               href={car.policy_photo_url}
                               target="_blank"
                               rel="noreferrer"
-                              className="text-xs text-indigo-600 underline"
+                              className="text-xs text-teal-700 underline"
                             >
                               Ver póliza
                             </a>

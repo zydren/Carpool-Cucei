@@ -1,20 +1,20 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import { FormField, TextAreaField } from '../components/ui/FormField';
+import { FormSection } from '../components/ui/PageBlocks';
+import { PageHeader } from '../components/layout/AppShell';
 import { getCurrentUser } from '../services/authService';
-import { searchAddress, type GeocodingResult } from '../services/geocodingService';
+import { searchAddress, reverseGeocode, type GeocodingResult } from '../services/geocodingService';
 import { calculateRoute, formatDistance, formatDuration, type RouteResult } from '../services/routingService';
 import type { LineStringGeometry } from '../services/routingService';
 import { createTrip, type CreateTripParams } from '../services/tripService';
 import { getMyCars } from '../services/carService';
-import { MapContainer, TileLayer, Marker, Polyline, useMap } from 'react-leaflet';
-import L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
-import { Car, Clock, Ruler } from 'lucide-react';
+import LocationPickerMap, { type MapPick } from '../components/LocationPickerMap';
+import { Car, CheckCircle2, Clock, MapPin, Route as RouteIcon, Ruler, Sparkles, ThumbsUp } from 'lucide-react';
 
 // Coordenadas de CUCEI (Centro Universitario de Ciencias Exactas e Ingenierías)
 const CUCEI_COORDS = {
@@ -23,24 +23,14 @@ const CUCEI_COORDS = {
   address: 'CUCEI - Centro Universitario de Ciencias Exactas e Ingenierías, Blvd. Marcelino García Barragán #1421, Guadalajara, Jalisco, México'
 };
 
-// Icono personalizado para marcadores
-const createIcon = (color: string) => L.divIcon({
-  className: 'custom-marker',
-  html: `<div style="background-color: ${color}; width: 24px; height: 24px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);"></div>`,
-  iconSize: [24, 24],
-  iconAnchor: [12, 12],
-});
-
-const originIcon = createIcon('#4F46E5'); // Indigo
-const destinationIcon = createIcon('#10B981'); // Green
-
-// Componente para ajustar el mapa a los bounds
-const MapBounds = ({ bounds }: { bounds: L.LatLngBounds }) => {
-  const map = useMap();
-  useEffect(() => {
-    map.fitBounds(bounds, { padding: [50, 50] });
-  }, [bounds, map]);
-  return null;
+/**
+ * Acorta la dirección devuelta por Nominatim a una versión legible
+ * (calle + número y localidad) en lugar de mostrar toda la cadena de
+ * país/estado/historial. Ej: "Av. Revolución 1234, Guadalajara".
+ */
+const formatAddressForDisplay = (displayName: string): string => {
+  const parts = displayName.split(',').map((part) => part.trim()).filter(Boolean);
+  return parts.length > 2 ? `${parts[0]}, ${parts[1]}` : parts.join(', ');
 };
 
 const OfferTripPage = () => {
@@ -52,7 +42,6 @@ const OfferTripPage = () => {
     date: '',
     time: '',
     seatsAvailable: '',
-    price: '',
     notes: '',
   });
 
@@ -68,6 +57,38 @@ const OfferTripPage = () => {
   const [isCalculatingRoute, setIsCalculatingRoute] = useState(false);
   const [routeResult, setRouteResult] = useState<RouteResult | null>(null);
   const [routeError, setRouteError] = useState<string | null>(null);
+
+  // Selección directa del origen en el mapa (mismo patrón que SearchTripPage)
+  const [mapPick, setMapPick] = useState<MapPick | null>(null);
+  const [mapPickAddress, setMapPickAddress] = useState<string | null>(null);
+  const [isReverseGeocoding, setIsReverseGeocoding] = useState(false);
+  /** Token anti-carrera: invalida respuestas (ruta o dirección) obsoletas. */
+  const originActionRef = useRef(0);
+
+  /**
+   * Fuente única de verdad para el origen: el punto elegido en el mapa tiene
+   * prioridad sobre la dirección buscada por texto. En la práctica nunca están
+   * activos a la vez: cada selección limpia a la otra, así no se puede enviar
+   * una dirección de un lugar con coordenadas de otro.
+   */
+  const originPoint = useMemo<MapPick | null>(() => {
+    if (mapPick) {
+      return mapPick;
+    }
+    if (selectedOrigin) {
+      return { lat: parseFloat(selectedOrigin.lat), lng: parseFloat(selectedOrigin.lon) };
+    }
+    return null;
+  }, [mapPick, selectedOrigin]);
+
+  /**
+   * Punto al que el mapa centra la vista: solo para orígenes elegidos por
+   * texto. Un clic en el mapa no debe re-centrar (el usuario ya lo vio).
+   */
+  const focusPoint = useMemo<MapPick | null>(
+    () => (mapPick ? null : originPoint),
+    [mapPick, originPoint]
+  );
 
   // Verificar autenticación al cargar
   useEffect(() => {
@@ -106,6 +127,13 @@ const OfferTripPage = () => {
     setErrors({ ...errors, origin: '' });
     setAddressResults([]);
     setSelectedOrigin(null);
+    // Una nueva búsqueda por texto invalida cualquier acción de origen anterior
+    // y descarta el punto del mapa (consistente con el reset existente).
+    originActionRef.current += 1;
+    setMapPick(null);
+    setMapPickAddress(null);
+    setIsReverseGeocoding(false);
+    setIsCalculatingRoute(false);
     setRouteResult(null);
     setRouteError(null);
 
@@ -121,37 +149,95 @@ const OfferTripPage = () => {
     }
   };
 
+  /**
+   * Recalcula la ruta OSRM desde un punto hasta CUCEI. Es exactamente el
+   * flujo que ya usaba la selección por texto; ahora también lo utiliza el
+   * clic en el mapa. `token` (cuando se pasa) evita que una respuesta vieja
+   * sobrescriba la ruta de una selección más reciente.
+   */
+  const recalculateRoute = async (lat: number, lng: number, token?: number) => {
+    const isStale = () => token !== undefined && token !== originActionRef.current;
+    setIsCalculatingRoute(true);
+    try {
+      const route = await calculateRoute(lng, lat, CUCEI_COORDS.lng, CUCEI_COORDS.lat);
+      if (!isStale()) {
+        setRouteResult(route);
+        setRouteError(null);
+      }
+    } catch (error: unknown) {
+      console.error('Error calculating route:', error);
+      if (!isStale()) {
+        setRouteError('No pudimos calcular una ruta desde esa ubicación hasta CUCEI. Selecciona otra dirección.');
+        setRouteResult(null);
+      }
+    } finally {
+      if (!isStale()) {
+        setIsCalculatingRoute(false);
+      }
+    }
+  };
+
   const handleSelectAddress = async (result: GeocodingResult) => {
+    const action = ++originActionRef.current;
     setSelectedOrigin(result);
+    // La selección por texto sustituye al punto del mapa (fuente única).
+    setMapPick(null);
+    setMapPickAddress(null);
+    setIsReverseGeocoding(false);
     setAddressResults([]);
     setAddressQuery(result.display_name);
     setFormData({ ...formData, origin: result.display_name });
     setRouteError(null);
 
-    // Calcular ruta hacia CUCEI
-    setIsCalculatingRoute(true);
-    try {
-      const route = await calculateRoute(
-        parseFloat(result.lon),
-        parseFloat(result.lat),
-        CUCEI_COORDS.lng,
-        CUCEI_COORDS.lat
-      );
-      setRouteResult(route);
-    } catch (error: unknown) {
-      console.error('Error calculating route:', error);
-      setRouteError('No pudimos calcular una ruta desde esa ubicación hasta CUCEI. Selecciona otra dirección.');
-      setRouteResult(null);
-    } finally {
-      setIsCalculatingRoute(false);
-    }
+    // Calcular ruta hacia CUCEI (flujo existente)
+    await recalculateRoute(parseFloat(result.lat), parseFloat(result.lon), action);
+  };
+
+  /**
+   * Selección del origen haciendo clic en el mapa (mismo patrón que en
+   * SearchTripPage): guarda el punto, obtiene la dirección legible con
+   * reverse geocoding de forma opcional y recalcula la ruta con el flujo
+   * existente. La dirección nunca bloquea: si Nominatim no responde quedan
+   * las coordenadas del punto.
+   */
+  const handleMapPick = (pick: MapPick) => {
+    const action = ++originActionRef.current;
+    setMapPick(pick);
+    setMapPickAddress(null);
+    // El mapa tiene prioridad: sustituye a la dirección de texto anterior.
+    setSelectedOrigin(null);
+    setAddressResults([]);
+    setAddressQuery('');
+    setRouteResult(null);
+    setRouteError(null);
+    setErrors((prev) => ({ ...prev, origin: '' }));
+
+    // Dirección del punto (opcional): el error se ignora y quedan coordenadas.
+    setIsReverseGeocoding(true);
+    void (async () => {
+      try {
+        const address = await reverseGeocode(pick.lat, pick.lng);
+        // Si mientras tanto hubo otra acción de origen, ésta queda vieja.
+        if (action === originActionRef.current) {
+          setMapPickAddress(address);
+          setIsReverseGeocoding(false);
+        }
+      } catch {
+        // reverseGeocode nunca lanza; se deja por simetría con SearchTripPage.
+        if (action === originActionRef.current) {
+          setIsReverseGeocoding(false);
+        }
+      }
+    })();
+
+    void recalculateRoute(pick.lat, pick.lng, action);
   };
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
 
-    if (!selectedOrigin) {
-      newErrors.origin = 'Debes seleccionar una dirección válida usando "Buscar dirección"';
+    if (!originPoint) {
+      newErrors.origin = 'Selecciona tu punto de salida en el mapa o usa "Buscar dirección"';
     }
 
     if (!formData.date) {
@@ -178,15 +264,6 @@ const OfferTripPage = () => {
       }
     }
 
-    if (!formData.price) {
-      newErrors.price = 'El precio es requerido';
-    } else {
-      const price = parseFloat(formData.price);
-      if (price < 0) {
-        newErrors.price = 'El precio no puede ser negativo';
-      }
-    }
-
     if (!routeResult) {
       newErrors.route = 'No se ha calculado la ruta correctamente';
     }
@@ -207,18 +284,22 @@ const OfferTripPage = () => {
       return;
     }
 
-    if (!selectedOrigin || !routeResult) {
+    if (!originPoint || !routeResult) {
       return;
     }
 
     setIsSubmitted(true);
 
     try {
+    // Dirección guardada: la del mapa (o su fallback de coordenadas) o la
+    // seleccionada por texto; las coordenadas salen de la fuente única
+    // originPoint, así nunca se mezclan dos orígenes distintos.
+    const coordsFallback = `Lat ${originPoint.lat.toFixed(4)} · Lng ${originPoint.lng.toFixed(4)}`;
     const params: CreateTripParams = {
-        origin: selectedOrigin.display_name,
+        origin: mapPick ? (mapPickAddress ?? coordsFallback) : (selectedOrigin?.display_name ?? coordsFallback),
         destination: CUCEI_COORDS.address,
-        origin_lat: parseFloat(selectedOrigin.lat),
-        origin_lng: parseFloat(selectedOrigin.lon),
+        origin_lat: originPoint.lat,
+        origin_lng: originPoint.lng,
         route_distance_km: routeResult.distance / 1000,
         route_duration_minutes: Math.round(routeResult.duration / 60),
         /** Geometría GeoJSON LineString guardada para la fase futura de
@@ -227,7 +308,6 @@ const OfferTripPage = () => {
         date: formData.date,
         time: formData.time,
         seats_available: parseInt(formData.seatsAvailable),
-        price: parseFloat(formData.price),
         notes: formData.notes || undefined,
       };
 
@@ -239,11 +319,13 @@ const OfferTripPage = () => {
         date: '',
         time: '',
         seatsAvailable: '',
-        price: '',
         notes: '',
       });
       setAddressQuery('');
       setSelectedOrigin(null);
+      setMapPick(null);
+      setMapPickAddress(null);
+      setIsReverseGeocoding(false);
       setRouteResult(null);
       setAddressResults([]);
 
@@ -269,90 +351,71 @@ const OfferTripPage = () => {
 
   if (isLoadingAuth) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Verificando autenticación...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-slate-300 mx-auto mb-4"></div>
+          <p className="text-slate-600">Verificando autenticación...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-slate-50">
       <Navbar />
 
       <div className="pt-24 pb-16">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-12">
-            <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4">
-              Ofrecer Viaje
-            </h1>
-            <p className="text-xl text-gray-600 max-w-3xl mx-auto">
-              Comparte tu viaje a CUCEI y ayuda a otros estudiantes mientras ahorras en gastos.
-            </p>
-          </div>
+          <PageHeader
+            eyebrow="Publicar"
+            title="Ofrecer viaje"
+            description="Comparte tu viaje a CUCEI y ayuda a otros estudiantes."
+          />
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             {/* Información lateral */}
             <div className="lg:col-span-1">
               <Card className="p-6 mb-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Consejos para conductores</h3>
+                <h3 className="mb-4 flex items-center gap-2 text-base font-bold text-slate-900">
+                  <Sparkles className="h-4 w-4 text-teal-700" aria-hidden="true" />
+                  Consejos para conductores
+                </h3>
                 <ul className="space-y-3">
-                  <li className="flex items-start text-sm text-gray-600">
-                    <svg className="w-5 h-5 text-indigo-600 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                    </svg>
-                    Sé específico con los puntos de encuentro
-                  </li>
-                  <li className="flex items-start text-sm text-gray-600">
-                    <svg className="w-5 h-5 text-indigo-600 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                    </svg>
-                    Establece un precio justo y transparente
-                  </li>
-                  <li className="flex items-start text-sm text-gray-600">
-                    <svg className="w-5 h-5 text-indigo-600 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                    </svg>
-                    Mantén tu vehículo limpio y seguro
-                  </li>
-                  <li className="flex items-start text-sm text-gray-600">
-                    <svg className="w-5 h-5 text-indigo-600 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                    </svg>
-                    Sé puntual y respeta los horarios
-                  </li>
+                  {[
+                    'Sé específico con los puntos de encuentro',
+                    'Mantén tu vehículo limpio y seguro',
+                    'Sé puntual y respeta los horarios',
+                  ].map((tip) => (
+                    <li key={tip} className="flex items-start gap-2 text-sm text-slate-600">
+                      <CheckCircle2
+                        className="mt-0.5 h-4 w-4 shrink-0 text-teal-700"
+                        aria-hidden="true"
+                      />
+                      <span className="min-w-0">{tip}</span>
+                    </li>
+                  ))}
                 </ul>
               </Card>
 
-              <Card className="p-6 bg-gradient-to-br from-green-50 to-teal-50">
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">Beneficios de ofrecer viajes</h3>
-                <ul className="space-y-2 text-sm text-gray-600">
-                  <li className="flex items-center">
-                    <svg className="w-4 h-4 text-green-500 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                    </svg>
-                    Reduce tus costos de viaje
-                  </li>
-                  <li className="flex items-center">
-                    <svg className="w-4 h-4 text-green-500 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                    </svg>
-                    Conoce a otros estudiantes
-                  </li>
-                  <li className="flex items-center">
-                    <svg className="w-4 h-4 text-green-500 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                    </svg>
-                    Contribuye al medio ambiente
-                  </li>
-                  <li className="flex items-center">
-                    <svg className="w-4 h-4 text-green-500 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                    </svg>
-                    Construye tu reputación
-                  </li>
+              <Card className="p-6 bg-teal-50/60">
+                <h3 className="mb-3 flex items-center gap-2 text-base font-bold text-slate-900">
+                  <ThumbsUp className="h-4 w-4 text-teal-700" aria-hidden="true" />
+                  Beneficios de ofrecer viajes
+                </h3>
+                <ul className="space-y-2.5">
+                  {[
+                    'Aprovecha los asientos vacíos de tu auto',
+                    'Conoce a otros estudiantes',
+                    'Construye tu reputación',
+                  ].map((benefit) => (
+                    <li key={benefit} className="flex items-start gap-2 text-sm text-slate-600">
+                      <CheckCircle2
+                        className="mt-0.5 h-4 w-4 shrink-0 text-teal-700"
+                        aria-hidden="true"
+                      />
+                      <span className="min-w-0">{benefit}</span>
+                    </li>
+                  ))}
                 </ul>
               </Card>
             </div>
@@ -362,7 +425,7 @@ const OfferTripPage = () => {
               <Card className="p-8">
                 {hasRegisteredCar ? (
                   <>
-                <h2 className="text-2xl font-bold text-gray-900 mb-6">Detalles del Viaje</h2>
+                <h2 className="text-2xl font-bold text-slate-900 mb-6">Detalles del Viaje</h2>
 
                 {isSubmitted ? (
                   <div className="bg-green-50 border border-green-200 rounded-lg p-8 text-center">
@@ -376,226 +439,270 @@ const OfferTripPage = () => {
                   </div>
                 ) : (
                   <form onSubmit={handleSubmit}>
-                    {/* Búsqueda de dirección */}
-                    <div className="mb-6">
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        ¿Dónde sales?
-                      </label>
-                      <div className="flex gap-2">
-                        <input
-                          type="text"
-                          value={addressQuery}
-                          onChange={(e) => setAddressQuery(e.target.value)}
-                          placeholder="Ej: Av. Vallarta 1234, Guadalajara, Jalisco"
-                          className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                        />
-                        <Button
-                          type="button"
-                          onClick={handleSearchAddress}
-                          disabled={isSearchingAddress || isCalculatingRoute}
-                          variant="primary"
+                    <FormSection
+                      step="01"
+                      title="Origen"
+                      description="Indica el punto donde sales hacia CUCEI."
+                    >
+                      <div className="mb-2">
+                        <label
+                          className="mb-2 block text-sm font-semibold text-slate-700"
+                          htmlFor="offer-origin"
                         >
-                          {isSearchingAddress ? 'Buscando...' : 'Buscar dirección'}
-                        </Button>
+                          ¿Dónde sales?
+                        </label>
+                        <div className="flex flex-col gap-2 sm:flex-row">
+                          <input
+                            id="offer-origin"
+                            type="text"
+                            value={addressQuery}
+                            onChange={(e) => setAddressQuery(e.target.value)}
+                            placeholder="Ej: Av. Vallarta 1234, Guadalajara, Jalisco"
+                            className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-slate-900 transition-colors placeholder:text-slate-400 focus:border-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-500/30"
+                          />
+                          <Button
+                            type="button"
+                            onClick={handleSearchAddress}
+                            disabled={isSearchingAddress || isCalculatingRoute}
+                            variant="secondary"
+                            className="sm:w-auto"
+                          >
+                            {isSearchingAddress ? 'Buscando...' : 'Buscar dirección'}
+                          </Button>
+                        </div>
+                        {errors.origin && (
+                          <p className="mt-2 text-sm text-red-600">{errors.origin}</p>
+                        )}
                       </div>
-                      {errors.origin && (
-                        <p className="mt-1 text-sm text-red-600">{errors.origin}</p>
+
+                      {/* Origen elegido en el mapa: dirección legible vía
+                          reverse geocoding; las coordenadas solo aparecen
+                          como fallback cuando Nominatim no responde. */}
+                      {mapPick && (
+                        <div className="mt-4 rounded-xl border border-teal-500/30 bg-teal-50 p-4">
+                          <p className="flex items-center gap-1.5 text-sm font-semibold text-teal-700">
+                            <MapPin className="h-4 w-4 shrink-0" aria-hidden="true" />
+                            Punto de salida
+                          </p>
+                          <p className="mt-1 text-sm text-slate-700">
+                            {isReverseGeocoding
+                              ? 'Obteniendo dirección...'
+                              : mapPickAddress
+                                ? formatAddressForDisplay(mapPickAddress)
+                                : `Lat ${mapPick.lat.toFixed(4)} · Lng ${mapPick.lng.toFixed(4)}`}
+                          </p>
+                          <p className="mt-1 text-xs text-slate-500">
+                            Ubicación seleccionada en el mapa
+                          </p>
+                        </div>
                       )}
-                    </div>
+                    </FormSection>
 
                     {/* Resultados de búsqueda */}
                     {addressResults.length > 0 && (
-                      <div className="mb-6 bg-white border border-gray-200 rounded-lg shadow-sm max-h-60 overflow-y-auto">
-                        <p className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-50">
-                          Selecciona una dirección:
+                      <div className="mt-4 max-h-60 overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-sm">
+                        <p className="border-b border-slate-100 bg-slate-50 px-4 py-2 text-xs font-bold uppercase tracking-wide text-slate-500">
+                          Selecciona una dirección
                         </p>
                         {addressResults.map((result) => (
                           <button
                             key={result.place_id}
                             type="button"
                             onClick={() => handleSelectAddress(result)}
-                            className="w-full text-left px-4 py-3 hover:bg-gray-50 border-b border-gray-100 last:border-b-0 transition-colors"
+                            className="w-full border-b border-slate-100 px-4 py-3 text-left text-sm text-slate-700 transition-colors last:border-b-0 hover:bg-teal-50/60"
                           >
-                            <p className="text-sm text-gray-800">{result.display_name}</p>
+                            {result.display_name}
                           </button>
                         ))}
                       </div>
                     )}
 
-                    {/* Mapa y ruta */}
-                    {selectedOrigin && (
-                      <div className="mb-6">
-                        <div className="h-96 rounded-lg overflow-hidden border border-gray-300 mb-4">
-                          <MapContainer
-                            center={[parseFloat(selectedOrigin.lat), parseFloat(selectedOrigin.lon)]}
-                            zoom={13}
-                            style={{ height: '100%', width: '100%' }}
-                          >
-                            <TileLayer
-                              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                            />
-                            <Marker
-                              position={[parseFloat(selectedOrigin.lat), parseFloat(selectedOrigin.lon)]}
-                              icon={originIcon}
-                            />
-                            <Marker
-                              position={[CUCEI_COORDS.lat, CUCEI_COORDS.lng]}
-                              icon={destinationIcon}
-                            />
-                            {routeResult && (
-                              <>
-                                <Polyline
-                                  positions={routeResult.geometry.coordinates.map(([lng, lat]) => [lat, lng])}
-                                  color="#4F46E5"
-                                  weight={4}
-                                />
-                                <MapBounds
-                                  bounds={L.latLngBounds([
-                                    [parseFloat(selectedOrigin.lat), parseFloat(selectedOrigin.lon)],
-                                    [CUCEI_COORDS.lat, CUCEI_COORDS.lng],
-                                  ])}
-                                />
-                              </>
-                            )}
-                          </MapContainer>
-                        </div>
+                    <FormSection
+                      step="02"
+                      title="Ruta"
+                      description="Visualiza tu trayecto hacia CUCEI y su distancia estimada."
+                    >
+                      <div className="mb-4 h-80 sm:h-96 overflow-hidden rounded-2xl border border-slate-200">
+                        <LocationPickerMap
+                          centerLat={originPoint?.lat ?? CUCEI_COORDS.lat}
+                          centerLng={originPoint?.lng ?? CUCEI_COORDS.lng}
+                          zoom={originPoint ? 13 : 12}
+                          selected={originPoint}
+                          selectedLabel={originPoint ? 'Mi punto de salida' : undefined}
+                          focus={focusPoint}
+                          onPick={handleMapPick}
+                          routeGeometry={routeResult?.geometry ?? null}
+                          destination={{ lat: CUCEI_COORDS.lat, lng: CUCEI_COORDS.lng }}
+                          style={{ height: '100%', width: '100%' }}
+                        />
+                      </div>
 
-                        {isCalculatingRoute && (
-                          <div className="flex items-center text-indigo-600">
-                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-indigo-600 mr-2"></div>
-                            <span className="text-sm">Calculando ruta...</span>
-                          </div>
-                        )}
+                      <p className="mb-4 flex items-start gap-1.5 text-xs text-slate-500">
+                        <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                        <span>
+                          Haz clic en el mapa para marcar tu punto de salida. También puedes
+                          buscar una dirección en el paso anterior.
+                        </span>
+                      </p>
 
-                        {routeResult && (
-                          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                            <div className="flex items-center justify-around">
-                              <div className="text-center">
-                                <p className="text-sm text-blue-600 font-medium inline-flex items-center gap-1.5">
-  <Ruler className="w-4 h-4 shrink-0" aria-hidden="true" />
-  Distancia
-</p>
-                                <p className="text-lg font-bold text-blue-800">{formatDistance(routeResult.distance)}</p>
-                              </div>
-                              <div className="text-center">
-                                <p className="text-sm text-blue-600 font-medium inline-flex items-center gap-1.5">
-  <Clock className="w-4 h-4 shrink-0" aria-hidden="true" />
-  Tiempo estimado
-</p>
-                                <p className="text-lg font-bold text-blue-800">{formatDuration(routeResult.duration)}</p>
+                      {originPoint ? (
+                        <div>
+                          {isCalculatingRoute && (
+                            <p className="flex items-center gap-2 text-sm text-slate-500">
+                              <span className="h-4 w-4 animate-spin rounded-full border-b-2 border-teal-700" />
+                              Calculando ruta...
+                            </p>
+                          )}
+
+                          {routeResult && (
+                            <div className="rounded-2xl border border-teal-500/30 bg-teal-50 p-5">
+                              <div className="flex flex-wrap items-center justify-around gap-6">
+                                <div className="text-center">
+                                  <p className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-teal-700">
+                                    <Ruler className="h-4 w-4 shrink-0" aria-hidden="true" />
+                                    Distancia
+                                  </p>
+                                  <p className="mt-1 text-xl font-extrabold text-navy-950">
+                                    {formatDistance(routeResult.distance)}
+                                  </p>
+                                </div>
+                                <div className="text-center">
+                                  <p className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-teal-700">
+                                    <Clock className="h-4 w-4 shrink-0" aria-hidden="true" />
+                                    Tiempo estimado
+                                  </p>
+                                  <p className="mt-1 text-xl font-extrabold text-navy-950">
+                                    {formatDuration(routeResult.duration)}
+                                  </p>
+                                </div>
                               </div>
                             </div>
-                          </div>
-                        )}
+                          )}
 
-                        {routeError && (
-                          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                            <p className="text-sm text-red-700">{routeError}</p>
-                          </div>
-                        )}
-                      </div>
-                    )}
+                          {routeError && (
+                            <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+                              {routeError}
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-6 py-10 text-center">
+                          <RouteIcon className="mx-auto h-6 w-6 text-slate-400" aria-hidden="true" />
+                          <p className="mt-2 text-sm font-semibold text-slate-700">
+                            Aún no hay ruta que mostrar
+                          </p>
+                          <p className="mt-0.5 text-xs text-slate-500">
+                            Selecciona tu punto de salida en el mapa o busca una dirección
+                            para trazar el trayecto a CUCEI.
+                          </p>
+                        </div>
+                      )}
+                    </FormSection>
 
-                    {/* Destino fijo */}
-                    <div className="mb-6">
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Destino
-                      </label>
-                      <input
-                        type="text"
-                        value={CUCEI_COORDS.address}
-                        disabled
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-600 cursor-not-allowed"
-                      />
-                      <p className="mt-1 text-xs text-gray-500">El destino es siempre CUCEI</p>
-                    </div>
-
-                    {/* Campos adicionales */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                      <FormField
-                        label="Fecha"
-                        name="date"
-                        type="date"
-                        value={formData.date}
-                        onChange={handleChange}
-                        error={errors.date}
-                      />
-                      <FormField
-                        label="Hora"
-                        name="time"
-                        type="time"
-                        value={formData.time}
-                        onChange={handleChange}
-                        error={errors.time}
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                      <FormField
-                        label="Lugares Disponibles"
-                        name="seatsAvailable"
-                        type="number"
-                        min="1"
-                        max="8"
-                        value={formData.seatsAvailable}
-                        onChange={handleChange}
-                        error={errors.seatsAvailable}
-                        placeholder="Número de pasajeros"
-                      />
-                      <FormField
-                        label="Precio por Persona (MXN)"
-                        name="price"
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={formData.price}
-                        onChange={handleChange}
-                        error={errors.price}
-                        placeholder="0.00"
-                      />
-                    </div>
-
-                    <TextAreaField
-                      label="Notas Adicionales (Opcional)"
-                      name="notes"
-                      value={formData.notes}
-                      onChange={handleChange}
-                      placeholder="Información adicional como puntos de encuentro, preferencias, etc."
-                      rows={4}
-                    />
-
-                    {errors.general && (
-                      <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
-                        <p className="text-sm text-red-700">{errors.general}</p>
-                      </div>
-                    )}
-
-                    {errors.route && (
-                      <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
-                        <p className="text-sm text-red-700">{errors.route}</p>
-                      </div>
-                    )}
-
-                    <Button
-                      type="submit"
-                      variant="primary"
-                      size="lg"
-                      fullWidth
-                      disabled={!selectedOrigin || !routeResult || isCalculatingRoute}
+                    <FormSection
+                      step="03"
+                      title="Detalles del viaje"
+                      description="Destino, fecha y lugares del viaje."
                     >
-                      Publicar Viaje
-                    </Button>
+                      <div className="mb-6">
+                        <label
+                          className="mb-2 block text-sm font-semibold text-slate-700"
+                          htmlFor="offer-destination"
+                        >
+                          Destino
+                        </label>
+                        <input
+                          id="offer-destination"
+                          type="text"
+                          value={CUCEI_COORDS.address}
+                          disabled
+                          className="w-full cursor-not-allowed rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-slate-500"
+                        />
+                        <p className="mt-1.5 text-xs text-slate-500">
+                          El destino es siempre CUCEI.
+                        </p>
+                      </div>
+
+                      <div className="mb-6 grid grid-cols-1 gap-6 md:grid-cols-2">
+                        <FormField
+                          label="Fecha"
+                          name="date"
+                          type="date"
+                          value={formData.date}
+                          onChange={handleChange}
+                          error={errors.date}
+                        />
+                        <FormField
+                          label="Hora"
+                          name="time"
+                          type="time"
+                          value={formData.time}
+                          onChange={handleChange}
+                          error={errors.time}
+                        />
+                      </div>
+
+                      <div className="mb-6">
+                        <FormField
+                          label="Lugares disponibles"
+                          name="seatsAvailable"
+                          type="number"
+                          min="1"
+                          max="8"
+                          value={formData.seatsAvailable}
+                          onChange={handleChange}
+                          error={errors.seatsAvailable}
+                          placeholder="Número de pasajeros"
+                        />
+                      </div>
+
+                      <TextAreaField
+                        label="Notas adicionales (opcional)"
+                        name="notes"
+                        value={formData.notes}
+                        onChange={handleChange}
+                        placeholder="Información adicional como puntos de encuentro, preferencias, etc."
+                        rows={4}
+                      />
+                    </FormSection>
+
+                    <FormSection
+                      step="04"
+                      title="Confirmación"
+                      description="Revisa los datos y publica tu viaje."
+                    >
+                      {errors.general && (
+                        <div className="mb-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+                          {errors.general}
+                        </div>
+                      )}
+
+                      {errors.route && (
+                        <div className="mb-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+                          {errors.route}
+                        </div>
+                      )}
+
+                      <Button
+                        type="submit"
+                        variant="primary"
+                        size="lg"
+                        fullWidth
+                        disabled={!originPoint || !routeResult || isCalculatingRoute}
+                      >
+                        Publicar Viaje
+                      </Button>
+                    </FormSection>
                   </form>
                   )}
                   </>
                 ) : (
                   <div className="text-center py-12">
-                    <Car className="w-12 h-12 mx-auto mb-4 text-indigo-500" aria-hidden="true" />
-                    <h2 className="text-2xl font-bold text-gray-900 mb-2">
+                    <Car className="w-12 h-12 mx-auto mb-4 text-teal-700" aria-hidden="true" />
+                    <h2 className="text-2xl font-bold text-slate-900 mb-2">
                       Necesitas registrar tu auto
                     </h2>
-                    <p className="text-gray-600 mb-2">
+                    <p className="text-slate-600 mb-2">
                       Para ofrecer un viaje debes tener un auto registrado con los datos de tu seguro.
                     </p>
                     <Button

@@ -72,12 +72,12 @@ const SupabaseTestPage = () => {
   }, []);
 
   return (
-    <div className="min-h-screen bg-gray-50 p-8">
+    <div className="min-h-screen bg-slate-50 p-8">
       <div className="max-w-4xl mx-auto">
-        <h1 className="text-3xl font-bold text-gray-900 mb-6">Supabase Connection Test</h1>
+        <h1 className="text-3xl font-bold text-slate-900 mb-6">Supabase Connection Test</h1>
         
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">Connection Status</h2>
+          <h2 className="text-xl font-semibold text-slate-900 mb-4">Connection Status</h2>
           
           {connectionStatus === 'loading' && (
             <div className="flex items-center text-blue-600">
@@ -118,17 +118,17 @@ const SupabaseTestPage = () => {
         </div>
 
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">Authentication Status</h2>
-          <p className="text-gray-700">{authStatus}</p>
+          <h2 className="text-xl font-semibold text-slate-900 mb-4">Authentication Status</h2>
+          <p className="text-slate-700">{authStatus}</p>
         </div>
 
         {connectionStatus === 'success' && tables.length > 0 && (
           <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">Available Tables</h2>
+            <h2 className="text-xl font-semibold text-slate-900 mb-4">Available Tables</h2>
             <ul className="space-y-2">
               {tables.map((table) => (
-                <li key={table} className="flex items-center text-gray-700">
-                  <svg className="h-5 w-5 text-indigo-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <li key={table} className="flex items-center text-slate-700">
+                  <svg className="h-5 w-5 text-teal-700 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
                   </svg>
                   {table}
@@ -158,7 +158,7 @@ const SupabaseTestPage = () => {
         <div className="mt-6">
           <button
             onClick={() => window.location.href = '/'}
-            className="bg-indigo-600 text-white hover:bg-indigo-700 px-4 py-2 rounded-lg"
+            className="bg-slate-900 text-white hover:bg-slate-800 px-4 py-2 rounded-lg"
           >
             Back to Home
           </button>

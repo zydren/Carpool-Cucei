@@ -38,7 +38,7 @@ const StarRating = ({
         const starIcon = (
           <svg
             className={`${sizeClasses[size]} ${
-              filled ? 'text-yellow-400' : 'text-gray-300'
+              filled ? 'text-yellow-400' : 'text-slate-300'
             }`}
             fill="currentColor"
             viewBox="0 0 20 20"
@@ -59,7 +59,7 @@ const StarRating = ({
             aria-checked={star === value}
             aria-label={`${star} estrellas`}
             onClick={() => onChange?.(star)}
-            className="focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded hover:scale-110 transition-transform"
+            className="focus:outline-none focus:ring-2 focus:ring-teal-500 rounded hover:scale-110 transition-transform"
           >
             {starIcon}
           </button>

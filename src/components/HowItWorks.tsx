@@ -43,31 +43,34 @@ const HowItWorks = () => {
   ];
 
   return (
-    <section id="como-funciona" className="py-20 bg-white">
+    <section id="como-funciona" className="py-16 sm:py-20 bg-white">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="text-center mb-16">
-          <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
-            ¿Cómo funciona Carpool Universitario?
+        <div className="max-w-2xl mb-12">
+          <p className="text-xs font-bold uppercase tracking-[0.18em] text-teal-700">
+            Cómo funciona
+          </p>
+          <h2 className="mt-2 text-3xl md:text-4xl font-extrabold tracking-tight text-slate-900">
+            De tu casa a CUCEI en 4 pasos
           </h2>
-          <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-            Es muy sencillo comenzar a compartir viajes. Sigue estos 4 pasos simples.
+          <p className="mt-3 text-lg text-slate-500">
+            Un flujo simple para buscar, publicar y coordinar viajes entre estudiantes.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {steps.map((step) => (
             <div key={step.number} className="relative">
-              <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-2xl p-8 text-center h-full hover:shadow-xl transition-shadow duration-300">
-                <div className="inline-flex items-center justify-center w-16 h-16 bg-indigo-600 text-white rounded-full mb-6">
+              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6 sm:p-8 h-full transition-all duration-200 hover:-translate-y-1 hover:bg-white hover:shadow-[0_12px_28px_rgba(15,23,42,0.1)] hover:border-teal-500/40">
+                <div className="inline-flex items-center justify-center w-12 h-12 bg-slate-900 text-white rounded-xl mb-5">
                   {step.icon}
                 </div>
-                <div className="text-4xl font-bold text-indigo-200 mb-4">
-                  {step.number}
+                <div className="text-sm font-bold text-teal-700 mb-2">
+                  Paso {step.number}
                 </div>
-                <h3 className="text-xl font-semibold text-gray-900 mb-3">
+                <h3 className="text-lg font-bold text-slate-900 mb-2">
                   {step.title}
                 </h3>
-                <p className="text-gray-600">
+                <p className="text-sm text-slate-500 leading-relaxed">
                   {step.description}
                 </p>
               </div>

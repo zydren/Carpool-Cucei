@@ -1,0 +1,59 @@
+warning: in the working copy of 'index.html', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/App.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/components/Benefits.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/components/Footer.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/components/HeroSections.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/components/HowItWorks.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/components/Navbar.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/components/ui/Button.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/components/ui/Card.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/components/ui/FormField.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/index.css', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/pages/ContactPage.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/pages/FAQPage.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/pages/HomePage.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/pages/HowItWorksPage.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/pages/NotFoundPage.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/pages/RegisterPage.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/pages/SecurityPage.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/pages/SupabaseTestPage.tsx', LF will be replaced by CRLF the next time Git touches it
+ index.html                           |   14 [32m+[m[31m-[m
+ src/App.tsx                          |    4 [32m+[m[31m-[m
+ src/components/Benefits.tsx          |   25 [32m+[m[31m-[m
+ src/components/Footer.tsx            |   49 [32m+[m[31m-[m
+ src/components/HeroSections.tsx      |   54 [32m+[m[31m-[m
+ src/components/HowItWorks.tsx        |   29 [32m+[m[31m-[m
+ src/components/LocationPickerMap.tsx |    4 [32m+[m[31m-[m
+ src/components/Navbar.tsx            |  100 [32m++[m[31m--[m
+ src/components/NotificationBell.tsx  |   48 [32m+[m[31m-[m
+ src/components/ProfileCard.tsx       |   77 [32m+[m[31m--[m
+ src/components/RatingModal.tsx       |    8 [32m+[m[31m-[m
+ src/components/ui/Button.tsx         |   16 [32m+[m[31m-[m
+ src/components/ui/Card.tsx           |    7 [32m+[m[31m-[m
+ src/components/ui/FormField.tsx      |   19 [32m+[m[31m-[m
+ src/components/ui/Modal.tsx          |   55 [32m+[m[31m-[m
+ src/components/ui/StarRating.tsx     |    4 [32m+[m[31m-[m
+ src/index.css                        |   59 [32m+[m[31m-[m
+ src/pages/CarRegistrationPage.tsx    |   66 [32m+[m[31m--[m
+ src/pages/ContactPage.tsx            |   48 [32m+[m[31m-[m
+ src/pages/FAQPage.tsx                |   20 [32m+[m[31m-[m
+ src/pages/HomePage.tsx               |    4 [32m+[m[31m-[m
+ src/pages/HowItWorksPage.tsx         |   48 [32m+[m[31m-[m
+ src/pages/LoginPage.tsx              |  236 [32m++++[m[31m----[m
+ src/pages/MyProfilePage.tsx          |  166 [32m+++[m[31m---[m
+ src/pages/MyTripsPage.tsx            | 1080 [32m++++++++++++++++++++++++++++[m[31m------[m
+ src/pages/NotFoundPage.tsx           |   12 [32m+[m[31m-[m
+ src/pages/OfferTripPage.tsx          |  533 [32m+++++++++[m[31m--------[m
+ src/pages/PublicProfilePage.tsx      |   55 [32m+[m[31m-[m
+ src/pages/RegisterPage.tsx           |  237 [32m++++[m[31m----[m
+ src/pages/ResetPasswordPage.tsx      |   10 [32m+[m[31m-[m
+ src/pages/SearchTripPage.tsx         |  270 [32m++++[m[31m-----[m
+ src/pages/SecurityPage.tsx           |   88 [32m+[m[31m--[m
+ src/pages/SupabaseTestPage.tsx       |   18 [32m+[m[31m-[m
+ src/pages/TripDetailPage.tsx         |  347 [32m+++++++++[m[31m--[m
+ src/services/geoSearchService.ts     |   28 [32m+[m[31m-[m
+ src/services/notificationService.ts  |   15 [32m+[m[31m-[m
+ src/services/profileService.ts       |   14 [32m+[m
+ src/services/tripRequestService.ts   |   61 [32m+[m[31m-[m
+ src/services/tripService.ts          |  371 [32m+++++++++++[m[31m-[m
+ 39 files changed, 2921 insertions(+), 1378 deletions(-)

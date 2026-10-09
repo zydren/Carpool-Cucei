@@ -1,13 +1,11 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import Navbar from '../components/Navbar';
-import Footer from '../components/Footer';
-import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import { FormField } from '../components/ui/FormField';
-import { login, resetPassword, type LoginParams } from '../services/authService';
 import Modal from '../components/ui/Modal';
-import { ArrowLeft } from 'lucide-react';
+import { Alert } from '../components/ui/PageBlocks';
+import { AuthShell } from '../components/layout/AuthShell';
+import { login, resetPassword, type LoginParams } from '../services/authService';
 
 const LoginPage = () => {
   const navigate = useNavigate();
@@ -126,134 +124,114 @@ const LoginPage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Navbar />
-      
-      <div className="pt-24 pb-16">
-        <div className="max-w-md mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">
-              Iniciar Sesión
-            </h1>
-            <p className="text-gray-600">
-              Accede a tu cuenta para buscar y ofrecer viajes
-            </p>
-          </div>
-
-          <Card className="p-8">
-            {errors.general && (
-              <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
-                <p className="text-red-800 text-sm">{errors.general}</p>
-              </div>
-            )}
-
-            <form onSubmit={handleSubmit}>
-              <FormField
-                label="Correo electrónico"
-                name="email"
-                type="email"
-                value={formData.email}
-                onChange={handleChange}
-                placeholder="tu.correo@alumnos.udg.mx"
-                error={errors.email}
-              />
-
-              <FormField
-                label="Contraseña"
-                name="password"
-                type="password"
-                value={formData.password}
-                onChange={handleChange}
-                placeholder="Tu contraseña"
-                error={errors.password}
-              />
-
-              <button
-                type="button"
-                onClick={handleOpenForgot}
-                className="text-sm text-indigo-600 hover:text-indigo-700 mt-1"
-              >
-                ¿Olvidaste tu contraseña?
-              </button>
-
-              <Button
-                type="submit"
-                variant="primary"
-                size="lg"
-                fullWidth
-                disabled={isLoading}
-                className="mt-6"
-              >
-                {isLoading ? 'Iniciando sesión...' : 'Iniciar Sesión'}
-              </Button>
-            </form>
-
-            <div className="mt-6 text-center">
-              <p className="text-gray-600">
-                ¿No tienes cuenta?{' '}
-                <Link to="/registro" className="text-indigo-600 hover:text-indigo-700 font-medium">
-                  Regístrate
-                </Link>
-              </p>
-            </div>
-          </Card>
-
-          <Modal
-            open={isForgotModalOpen}
-            onClose={handleCloseForgot}
-            title="Recuperar contraseña"
+    <AuthShell
+      eyebrow="Bienvenido de nuevo"
+      title="Iniciar sesión"
+      description="Accede a tu cuenta para buscar y ofrecer viajes hacia CUCEI."
+      footer={
+        <p className="text-sm text-slate-600">
+          ¿No tienes cuenta?{' '}
+          <Link
+            to="/registro"
+            className="font-semibold text-teal-700 hover:text-teal-800"
           >
-            {forgotMessage && (
-              <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg">
-                <p className="text-green-800 text-sm">{forgotMessage}</p>
-              </div>
-            )}
-
-            {forgotError && (
-              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
-                <p className="text-red-800 text-sm">{forgotError}</p>
-              </div>
-            )}
-
-            <form onSubmit={handleSendReset}>
-              <FormField
-                label="Correo electrónico"
-                name="forgotEmail"
-                type="email"
-                value={forgotEmail}
-                onChange={handleForgotEmailChange}
-                placeholder="tu.correo@alumnos.udg.mx"
-              />
-
-              <Button
-                type="submit"
-                variant="primary"
-                size="lg"
-                fullWidth
-                disabled={isSendingReset || !!forgotMessage}
-                className="mt-2"
-              >
-                {isSendingReset ? 'Enviando...' : 'Enviar enlace de recuperación'}
-              </Button>
-            </form>
-
-            <p className="mt-4 text-xs text-gray-500">
-              Si el correo está registrado, recibirás un enlace para crear una nueva
-              contraseña. No compartas tus contraseñas con nadie.
-            </p>
-          </Modal>
-
-          <div className="mt-6 text-center">
-            <Link to="/" className="inline-flex items-center gap-1.5 text-gray-600 hover:text-gray-700 text-sm">
-              <ArrowLeft className="w-4 h-4" aria-hidden="true" />
-              Volver al inicio
-            </Link>
-          </div>
+            Regístrate
+          </Link>
+        </p>
+      }
+    >
+      {errors.general && (
+        <div className="mb-6">
+          <Alert type="error">{errors.general}</Alert>
         </div>
-      </div>
+      )}
 
-      <Footer />
-    </div>
+      <form onSubmit={handleSubmit}>
+        <FormField
+          label="Correo electrónico"
+          name="email"
+          type="email"
+          value={formData.email}
+          onChange={handleChange}
+          placeholder="tu.correo@alumnos.udg.mx"
+          error={errors.email}
+        />
+
+        <FormField
+          label="Contraseña"
+          name="password"
+          type="password"
+          value={formData.password}
+          onChange={handleChange}
+          placeholder="Tu contraseña"
+          error={errors.password}
+        />
+
+        <div className="mb-6 text-right">
+          <button
+            type="button"
+            onClick={handleOpenForgot}
+            className="-mt-2 rounded text-sm font-medium text-teal-700 transition-colors hover:text-teal-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+          >
+            ¿Olvidaste tu contraseña?
+          </button>
+        </div>
+
+        <Button
+          type="submit"
+          variant="primary"
+          size="lg"
+          fullWidth
+          disabled={isLoading}
+        >
+          {isLoading ? 'Iniciando sesión...' : 'Iniciar Sesión'}
+        </Button>
+      </form>
+
+      <Modal
+        open={isForgotModalOpen}
+        onClose={handleCloseForgot}
+        title="Recuperar contraseña"
+        description="Te enviaremos un enlace para restablecer tu contraseña."
+      >
+        {forgotMessage && (
+          <div className="mb-4">
+            <Alert type="success">{forgotMessage}</Alert>
+          </div>
+        )}
+
+        {forgotError && (
+          <div className="mb-4">
+            <Alert type="error">{forgotError}</Alert>
+          </div>
+        )}
+
+        <form onSubmit={handleSendReset}>
+          <FormField
+            label="Correo electrónico"
+            name="forgotEmail"
+            type="email"
+            value={forgotEmail}
+            onChange={handleForgotEmailChange}
+            placeholder="tu.correo@alumnos.udg.mx"
+          />
+
+          <Button
+            type="submit"
+            variant="primary"
+            fullWidth
+            disabled={isSendingReset || !!forgotMessage}
+          >
+            {isSendingReset ? 'Enviando...' : 'Enviar enlace de recuperación'}
+          </Button>
+        </form>
+
+        <p className="mt-4 text-xs text-slate-500">
+          Si el correo está registrado, recibirás un enlace para crear una nueva
+          contraseña. No compartas tus contraseñas con nadie.
+        </p>
+      </Modal>
+    </AuthShell>
   );
 };
 

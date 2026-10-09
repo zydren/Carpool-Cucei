@@ -99,16 +99,16 @@ const ResetPasswordPage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-slate-50">
       <Navbar />
 
       <div className="pt-24 pb-16">
         <div className="max-w-md mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">
+            <h1 className="text-3xl font-bold text-slate-900 mb-2">
               Restablecer Contraseña
             </h1>
-            <p className="text-gray-600">
+            <p className="text-slate-600">
               Elige una nueva contraseña para tu cuenta
             </p>
           </div>
@@ -147,7 +147,7 @@ const ResetPasswordPage = () => {
                 error={errors.confirmPassword}
               />
 
-              <div className="mt-2 mb-4 p-3 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-600">
+              <div className="mt-2 mb-4 p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-600">
                 La contraseña debe contener:
                 <ul className="list-disc pl-4 mt-1">
                   <li>Al menos 10 caracteres</li>
@@ -173,7 +173,7 @@ const ResetPasswordPage = () => {
             <div className="mt-6 text-center">
               <Link
                 to="/login"
-                className="inline-flex items-center gap-1.5 text-indigo-600 hover:text-indigo-700 font-medium"
+                className="inline-flex items-center gap-1.5 text-teal-700 hover:text-teal-800 font-medium"
               >
                 <ArrowLeft className="w-4 h-4" aria-hidden="true" />
                 Volver a Iniciar Sesión

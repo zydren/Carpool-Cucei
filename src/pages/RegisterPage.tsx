@@ -1,12 +1,11 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import Navbar from '../components/Navbar';
-import Footer from '../components/Footer';
-import Card from '../components/ui/Card';
+import { ArrowLeft, ShieldCheck } from 'lucide-react';
 import Button from '../components/ui/Button';
 import { FormField } from '../components/ui/FormField';
+import { Alert } from '../components/ui/PageBlocks';
+import { AuthShell } from '../components/layout/AuthShell';
 import { register, type RegisterParams } from '../services/authService';
-import { ArrowLeft } from 'lucide-react';
 
 const RegisterPage = () => {
   const navigate = useNavigate();
@@ -114,128 +113,118 @@ const RegisterPage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Navbar />
-      
-      <div className="pt-24 pb-16">
-        <div className="max-w-md mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">
-              Crear Cuenta
-            </h1>
-            <p className="text-gray-600">
-              Únete a Carpool Universitario y comienza a compartir viajes
-            </p>
-          </div>
-
-          <Card className="p-8">
-            <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-              <p className="text-blue-800 text-sm font-medium mb-2">Requisitos de contraseña:</p>
-              <ul className="text-blue-700 text-xs space-y-1 list-disc list-inside">
-                <li>Mínimo 10 caracteres</li>
-                <li>Al menos una letra mayúscula</li>
-                <li>Al menos una letra minúscula</li>
-                <li>Al menos un número</li>
-                <li>Al menos un carácter especial (!@#$%^&*(),.?":{}|&lt;&gt;)</li>
-              </ul>
-            </div>
-
-            {successMessage && (
-              <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg">
-                <p className="text-green-800 text-sm">{successMessage}</p>
-              </div>
-            )}
-
-            {errors.general && (
-              <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
-                <p className="text-red-800 text-sm">{errors.general}</p>
-              </div>
-            )}
-
-            <form onSubmit={handleSubmit}>
-              <FormField
-                label="Nombre completo"
-                name="fullName"
-                type="text"
-                value={formData.fullName}
-                onChange={handleChange}
-                placeholder="Tu nombre completo"
-                error={errors.fullName}
-              />
-
-              <FormField
-                label="Correo institucional"
-                name="email"
-                type="email"
-                value={formData.email}
-                onChange={handleChange}
-                placeholder="tu.correo@alumnos.udg.mx"
-                error={errors.email}
-              />
-
-              <FormField
-                label="Contraseña"
-                name="password"
-                type="password"
-                value={formData.password}
-                onChange={handleChange}
-                placeholder="Mínimo 10 caracteres con mayúscula, minúscula, número y especial"
-                error={errors.password}
-              />
-
-              <FormField
-                label="Confirmar contraseña"
-                name="confirmPassword"
-                type="password"
-                value={formData.confirmPassword}
-                onChange={handleChange}
-                placeholder="Repite tu contraseña"
-                error={errors.confirmPassword}
-              />
-
-              <FormField
-                label="Teléfono"
-                name="phone"
-                type="tel"
-                value={formData.phone}
-                onChange={handleChange}
-                placeholder="10 dígitos (ej: 3312345678)"
-                error={errors.phone}
-              />
-
-              <Button
-                type="submit"
-                variant="primary"
-                size="lg"
-                fullWidth
-                disabled={isLoading}
-                className="mt-6"
-              >
-                {isLoading ? 'Registrando...' : 'Crear Cuenta'}
-              </Button>
-            </form>
-
-            <div className="mt-6 text-center">
-              <p className="text-gray-600">
-                ¿Ya tienes cuenta?{' '}
-                <Link to="/login" className="text-indigo-600 hover:text-indigo-700 font-medium">
-                  Inicia sesión
-                </Link>
-              </p>
-            </div>
-          </Card>
-
-          <div className="mt-6 text-center">
-            <Link to="/" className="inline-flex items-center gap-1.5 text-gray-600 hover:text-gray-700 text-sm">
-              <ArrowLeft className="w-4 h-4" aria-hidden="true" />
-              Volver al inicio
-            </Link>
-          </div>
-        </div>
+    <AuthShell
+      eyebrow="Nuevo en Carpool"
+      title="Crear cuenta"
+      description="Únete a Carpool Universitario y comienza a compartir viajes hacia CUCEI."
+      footer={
+        <p className="text-sm text-slate-500">
+          ¿Ya tienes cuenta?{' '}
+          <Link to="/login" className="font-semibold text-teal-700 hover:text-teal-800">
+            Inicia sesión
+          </Link>
+        </p>
+      }
+    >
+      <div className="mb-6 rounded-xl border border-teal-100 bg-teal-50/70 p-4">
+        <p className="mb-2 flex items-center gap-2 text-sm font-semibold text-teal-900">
+          <ShieldCheck className="h-4 w-4 shrink-0" aria-hidden="true" />
+          Requisitos de contraseña
+        </p>
+        <ul className="list-inside list-disc space-y-1 text-xs text-slate-600">
+          <li>Mínimo 10 caracteres</li>
+          <li>Al menos una letra mayúscula</li>
+          <li>Al menos una letra minúscula</li>
+          <li>Al menos un número</li>
+          <li>Al menos un carácter especial (!@#$%^&*(),.?":{}|&lt;&gt;)</li>
+        </ul>
       </div>
 
-      <Footer />
-    </div>
+      {successMessage && (
+        <div className="mb-6">
+          <Alert type="success">{successMessage}</Alert>
+        </div>
+      )}
+
+      {errors.general && (
+        <div className="mb-6">
+          <Alert type="error">{errors.general}</Alert>
+        </div>
+      )}
+
+      <form onSubmit={handleSubmit}>
+        <FormField
+          label="Nombre completo"
+          name="fullName"
+          type="text"
+          value={formData.fullName}
+          onChange={handleChange}
+          placeholder="Tu nombre completo"
+          error={errors.fullName}
+        />
+
+        <FormField
+          label="Correo institucional"
+          name="email"
+          type="email"
+          value={formData.email}
+          onChange={handleChange}
+          placeholder="tu.correo@alumnos.udg.mx"
+          error={errors.email}
+        />
+
+        <FormField
+          label="Contraseña"
+          name="password"
+          type="password"
+          value={formData.password}
+          onChange={handleChange}
+          placeholder="Mínimo 10 caracteres con mayúscula, minúscula, número y especial"
+          error={errors.password}
+        />
+
+        <FormField
+          label="Confirmar contraseña"
+          name="confirmPassword"
+          type="password"
+          value={formData.confirmPassword}
+          onChange={handleChange}
+          placeholder="Repite tu contraseña"
+          error={errors.confirmPassword}
+        />
+
+        <FormField
+          label="Teléfono"
+          name="phone"
+          type="tel"
+          value={formData.phone}
+          onChange={handleChange}
+          placeholder="10 dígitos (ej: 3312345678)"
+          error={errors.phone}
+        />
+
+        <Button
+          type="submit"
+          variant="primary"
+          size="lg"
+          fullWidth
+          disabled={isLoading}
+          className="mt-2"
+        >
+          {isLoading ? 'Registrando...' : 'Crear cuenta'}
+        </Button>
+      </form>
+
+      <div className="mt-6 text-center">
+        <Link
+          to="/"
+          className="inline-flex items-center gap-1.5 text-sm text-slate-500 transition-colors hover:text-slate-700"
+        >
+          <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+          Volver al inicio
+        </Link>
+      </div>
+    </AuthShell>
   );
 };
 

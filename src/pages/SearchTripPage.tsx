@@ -1,11 +1,11 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import Navbar from '../components/Navbar';
-import Footer from '../components/Footer';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 import { FormField } from '../components/ui/FormField';
+import { AppShell, PageHeader } from '../components/layout/AppShell';
+import { EmptyState, Alert } from '../components/ui/PageBlocks';
 import {
   searchTripsByLocation,
   getAllPublishedTrips,
@@ -19,15 +19,15 @@ import { getCurrentUser } from '../services/authService';
 import { getMyTripRequests, createTripRequest } from '../services/tripRequestService';
 import type { TripRequestStatus } from '../services/tripRequestService';
 import {
-  searchAddress,
   geocodeQuery,
+  reverseGeocode,
   searchLocationSuggestions,
 } from '../services/geocodingService';
-import type { GeocodingResult, GeocodedLocation } from '../services/geocodingService';
+import type { GeocodedLocation } from '../services/geocodingService';
 import LocationPickerMap from '../components/LocationPickerMap';
-import type { MapPick } from '../components/LocationPickerMap';
+import type { MapPick, TripOriginMarker } from '../components/LocationPickerMap';
 import {
-  AlertTriangle,
+  Car,
   CheckCircle2,
   Eraser,
   Eye,
@@ -40,12 +40,6 @@ import {
   Type,
   X,
 } from 'lucide-react';
-
-interface SelectedPickup {
-  address: string;
-  lat: number;
-  lng: number;
-}
 
 /** Mínimo de caracteres escritos antes de pedir sugerencias a Nominatim. */
 const MIN_SUGGESTION_CHARS = 3;
@@ -91,6 +85,17 @@ const SearchTripPage = () => {
     { type: 'text' | 'map'; name: string } | null
   >(null);
   const [geocodingNotice, setGeocodingNotice] = useState<string | null>(null);
+  /**
+   * Dirección (geocodificación inversa) del punto elegido en el mapa.
+   * null mientras carga o si Nominatim no respondió: el punto sigue siendo
+   * válido con sus coordenadas.
+   */
+  const [mapPickAddress, setMapPickAddress] = useState<string | null>(null);
+  /**
+   * Aviso de "elige primero tu punto en el mapa" cuando se intenta solicitar
+   * un viaje sin origen seleccionado.
+   */
+  const [originRequiredNotice, setOriginRequiredNotice] = useState<string | null>(null);
   /** Punto confirmado desde el texto escrito (marcador de confirmación). */
   const [textPick, setTextPick] = useState<TextLocationPick | null>(null);
   /** Punto al que el mapa debe desplazarse al confirmar el texto escrito. */
@@ -102,6 +107,11 @@ const SearchTripPage = () => {
    * una geocodificación que terminó después de un clic más reciente en el mapa.
    */
   const locationActionRef = useRef(0);
+  /**
+   * Token de la búsqueda más reciente: descarta los resultados de una búsqueda
+   * que ya fue superada (por ejemplo, al cambiar el punto en el mapa).
+   */
+  const searchRequestRef = useRef(0);
   /** Sugerencias de lugares parecidos al texto escrito (autocompletado). */
   const [suggestions, setSuggestions] = useState<GeocodedLocation[]>([]);
   /** Texto al que corresponden las sugerencias que hay en pantalla. */
@@ -128,14 +138,10 @@ const SearchTripPage = () => {
     Record<string, TripRequestStatus>
   >({});
 
-  // Modal de solicitud de lugar
+  // Modal de solicitud de lugar: el origen YA está elegido en el mapa, así que
+  // el modal solo confirma y envía (no vuelve a preguntar "¿de dónde sales?").
   const [selectedTrip, setSelectedTrip] = useState<TripSearchResult | null>(null);
-  const [pickupQuery, setPickupQuery] = useState('');
-  const [pickupResults, setPickupResults] = useState<GeocodingResult[]>([]);
-  const [selectedPickup, setSelectedPickup] = useState<SelectedPickup | null>(null);
-  const [isSearchingPickup, setIsSearchingPickup] = useState(false);
   const [isSubmittingRequest, setIsSubmittingRequest] = useState(false);
-  const [pickupError, setPickupError] = useState<string | null>(null);
   const [modalError, setModalError] = useState<string | null>(null);
 
   // Cargar el usuario y el estado de sus solicitudes al montar
@@ -277,11 +283,39 @@ const SearchTripPage = () => {
     }
   };
 
-  /** El clic en el mapa es la acción más reciente y precisa: pasa a ser el origen. */
+  /**
+   * El clic en el mapa es la acción más reciente y precisa: pasa a ser el origen
+   * ("Mi punto de salida"). Se geocodifica la dirección inversa de forma
+   * opcional (si falla, quedan solo las coordenadas) y, si ya hay resultados en
+   * pantalla, se vuelve a ejecutar el matching con el nuevo punto: un solo
+   * disparo por clic, nunca por arrastre del mapa.
+   */
   const handleMapPick = (pick: MapPick) => {
     locationActionRef.current += 1;
+    const action = locationActionRef.current;
     setMapPick(pick);
+    setMapPickAddress(null);
+    setOriginRequiredNotice(null);
     setGeocodingNotice(null);
+
+    // Dirección del punto (opcional): el error se ignora y quedan coordenadas.
+    void (async () => {
+      try {
+        const address = await reverseGeocode(pick.lat, pick.lng);
+        // Si mientras tanto ocurrió otra acción de ubicación, ésta queda vieja.
+        if (address !== null && action === locationActionRef.current) {
+          setMapPickAddress(address);
+        }
+      } catch {
+        // Sin dirección: el punto sigue siendo válido con sus coordenadas.
+      }
+    })();
+
+    // Re-búsqueda automática solo cuando hay resultados con filtros activos
+    // (la vista "ver todos los viajes" no se sustituye con esto).
+    if (hasSearched && !isShowingAllTrips) {
+      void runSearch(pick);
+    }
   };
 
   /**
@@ -372,8 +406,16 @@ const SearchTripPage = () => {
     setFocusPoint({ lat: suggestion.lat, lng: suggestion.lng });
   };
 
-  const handleSearch = async (e: React.FormEvent) => {
-    e.preventDefault();
+  /**
+   * Ejecuta la búsqueda de viajes. Si se pasa `pointOverride` se usa ese punto
+   * como origen (por ejemplo, un clic más reciente en el mapa); si no, se
+   * resuelve el punto actual: el clic en el mapa con prioridad y, en su defecto,
+   * el texto geocodificado con Nominatim. Un único flujo para el botón
+   * "Buscar Viajes" y para cambiar el origen directamente en el mapa.
+   */
+  const runSearch = async (pointOverride?: MapPick) => {
+    const request = searchRequestRef.current + 1;
+    searchRequestRef.current = request;
     setHasSearched(true);
     // Una búsqueda normal sustituye la vista "todos los viajes".
     setIsShowingAllTrips(false);
@@ -384,18 +426,23 @@ const SearchTripPage = () => {
     setSuccessMessage(null);
     // El aviso de geocodificación es por búsqueda: nunca debe quedar pegado
     setGeocodingNotice(null);
+    setOriginRequiredNotice(null);
 
     try {
       const originText = locationText.trim();
 
       // Resolver el punto de búsqueda:
-      // 1. El punto del mapa tiene prioridad (es el más preciso).
-      // 2. Si no hay punto en el mapa, se geocodifica el texto con Nominatim.
+      // 1. El punto indicado (clic más reciente en el mapa) tiene prioridad.
+      // 2. Si no, se geocodifica el texto con Nominatim.
       let originLatitude: number | undefined;
       let originLongitude: number | undefined;
       let searchInfo: { type: 'text' | 'map'; name: string } | null = null;
 
-      if (mapPick) {
+      if (pointOverride) {
+        originLatitude = pointOverride.lat;
+        originLongitude = pointOverride.lng;
+        searchInfo = { type: 'map', name: 'tu punto seleccionado en el mapa' };
+      } else if (mapPick) {
         originLatitude = mapPick.lat;
         originLongitude = mapPick.lng;
         searchInfo = { type: 'map', name: 'tu punto seleccionado en el mapa' };
@@ -408,6 +455,12 @@ const SearchTripPage = () => {
           searchInfo = { type: 'text', name: confirmed.name };
         }
       }
+
+      // Si esta búsqueda ya fue superada por otra más reciente, se descarta.
+      if (request !== searchRequestRef.current) {
+        return;
+      }
+
       // El punto original del pasajero se conserva aparte (searchPoint): el
       // punto de recogida ajustado sobre la ruta se calcula a partir de él y
       // nunca lo reemplaza.
@@ -425,16 +478,30 @@ const SearchTripPage = () => {
         originLatitude,
         originLongitude,
       });
+
+      if (request !== searchRequestRef.current) {
+        return;
+      }
       setTrips(results);
       setGeoSearchInfo(searchInfo);
     } catch (err) {
+      if (request !== searchRequestRef.current) {
+        return;
+      }
       console.error('Error searching trips:', err);
       setError('Error al buscar viajes. Por favor intenta nuevamente.');
       setTrips([]);
       setGeoSearchInfo(null);
     } finally {
-      setIsLoading(false);
+      if (request === searchRequestRef.current) {
+        setIsLoading(false);
+      }
     }
+  };
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    void runSearch();
   };
 
   /**
@@ -470,6 +537,7 @@ const SearchTripPage = () => {
     locationActionRef.current += 1;
     setLocationText('');
     setMapPick(null);
+    setMapPickAddress(null);
     setTextPick(null);
     setFocusPoint(null);
     setGeoSearchInfo(null);
@@ -517,69 +585,83 @@ const SearchTripPage = () => {
       ? { lat: pickupInfo.lat, lng: pickupInfo.lng }
       : null;
 
+  /**
+   * Origen único del pasajero (fuente de verdad): el punto elegido con clic en
+   * el mapa; si el usuario prefirió escribir, el texto ya confirmado. Es el
+   * punto que se usa automáticamente al solicitar un viaje: no se vuelve a
+   * preguntar "¿de dónde sales?".
+   */
+  const selectedOrigin: MapPick | null = mapPick ?? textPick;
+
+  /** Etiqueta legible del origen: dirección si existe; si no, coordenadas. */
+  const selectedOriginLabel = useMemo(() => {
+    if (selectedOrigin === null) {
+      return '';
+    }
+    const coords = `Lat ${selectedOrigin.lat.toFixed(5)} · Lng ${selectedOrigin.lng.toFixed(5)}`;
+    if (mapPick) {
+      return mapPickAddress ?? coords;
+    }
+    return textPick?.name ?? coords;
+  }, [selectedOrigin, mapPick, mapPickAddress, textPick]);
+
+  /**
+   * Orígenes de los viajes listados, dibujados en el mapa con las coordenadas
+   * ya guardadas (origin_lat/origin_lng): sin geocodificación adicional.
+   */
+  const tripOriginMarkers = useMemo<TripOriginMarker[]>(
+    () =>
+      trips.flatMap((trip) =>
+        trip.originLat !== null && trip.originLng !== null
+          ? [
+              {
+                id: trip.id,
+                lat: trip.originLat,
+                lng: trip.originLng,
+                label: trip.origin,
+                highlighted: mapTrip?.id === trip.id,
+              },
+            ]
+          : []
+      ),
+    [trips, mapTrip]
+  );
+
+  /** Clic en el origen de un viaje (●): resalta ese viaje y muestra su ruta. */
+  const handleTripOriginClick = (tripId: string) => {
+    const trip = trips.find((item) => item.id === tripId);
+    if (trip) {
+      handleSelectTripOnMap(trip);
+    }
+  };
+
   const handleRequestClick = (trip: TripSearchResult) => {
     if (!isAuthenticated) {
       navigate('/login');
       return;
     }
 
+    // Sin punto elegido en el mapa no se abre el modal: se pide volver al mapa
+    // y elegirlo (el formulario de origen ya no existe).
+    if (selectedOrigin === null) {
+      setOriginRequiredNotice('Selecciona primero en el mapa desde dónde vas a salir.');
+      return;
+    }
+
+    setOriginRequiredNotice(null);
     setSelectedTrip(trip);
-    setPickupQuery('');
-    setPickupResults([]);
-    setSelectedPickup(null);
-    setPickupError(null);
     setModalError(null);
   };
 
   const closeModal = () => {
     setSelectedTrip(null);
-    setPickupQuery('');
-    setPickupResults([]);
-    setSelectedPickup(null);
-    setPickupError(null);
     setModalError(null);
-  };
-
-  const handleSearchPickup = async () => {
-    if (!pickupQuery.trim()) {
-      setPickupError('Ingresa una dirección de recogida para buscar.');
-      return;
-    }
-
-    setIsSearchingPickup(true);
-    setPickupError(null);
-    setModalError(null);
-    setPickupResults([]);
-    setSelectedPickup(null);
-
-    try {
-      const results = await searchAddress(pickupQuery);
-      setPickupResults(results);
-      if (results.length === 0) {
-        setPickupError('No encontramos esa dirección. Intenta escribirla de otra manera.');
-      }
-    } catch (error) {
-      console.error('Error buscando dirección de recogida:', error);
-      setPickupError('No encontramos esa dirección. Intenta escribirla de otra manera.');
-    } finally {
-      setIsSearchingPickup(false);
-    }
-  };
-
-  const handleSelectPickup = (result: GeocodingResult) => {
-    setSelectedPickup({
-      address: result.display_name,
-      lat: parseFloat(result.lat),
-      lng: parseFloat(result.lon),
-    });
-    setPickupQuery(result.display_name);
-    setPickupResults([]);
-    setPickupError(null);
   };
 
   const handleSubmitRequest = async () => {
-    if (!selectedTrip || !selectedPickup) {
-      setModalError('Selecciona una dirección de recogida válida.');
+    // El origen viene del mapa (selectedOrigin): no se vuelve a pedir.
+    if (!selectedTrip || !selectedOrigin) {
+      setModalError('Selecciona primero en el mapa desde dónde vas a salir.');
       return;
     }
 
@@ -589,9 +671,9 @@ const SearchTripPage = () => {
     try {
       await createTripRequest({
         tripId: selectedTrip.id,
-        pickupAddress: selectedPickup.address,
-        pickupLat: selectedPickup.lat,
-        pickupLng: selectedPickup.lng,
+        pickupAddress: selectedOriginLabel,
+        pickupLat: selectedOrigin.lat,
+        pickupLng: selectedOrigin.lng,
       });
 
       setRequestStatusByTrip((prev) => ({
@@ -640,7 +722,7 @@ const SearchTripPage = () => {
 
     if (trip.seatsAvailable <= 0) {
       return (
-        <span className="inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium bg-gray-100 text-gray-500 border border-gray-200">
+        <span className="inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium bg-slate-100 text-slate-500 border border-slate-200">
           Viaje completo
         </span>
       );
@@ -662,34 +744,34 @@ const SearchTripPage = () => {
   };
 
   return (
-<div className="min-h-screen bg-gray-50">
-      <Navbar />
-
-      <div className="pt-24 pb-16">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-12">
-            <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4">
-              Buscar Viaje
-            </h1>
-            <p className="text-xl text-gray-600 max-w-3xl mx-auto">
-              Encuentra el viaje perfecto para tu próximo destino. Comparte gastos y conoce a otros estudiantes.
-            </p>
-          </div>
+    <AppShell>
+      <PageHeader
+        eyebrow="Buscar"
+        title="Encuentra tu viaje a CUCEI"
+        description="Busca por ubicación, revisa la ruta en el mapa y solicita tu lugar."
+      />
+      <div className="app-animate-fade-up">
 
           {successMessage && (
-            <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg">
-              <p className="text-green-800 text-sm">{successMessage}</p>
+            <div className="mb-6">
+              <Alert type="success">{successMessage}</Alert>
             </div>
           )}
 
-          <Card className="p-6 mb-8">
+          <Card className="p-6 sm:p-8 mb-8">
+            <div className="mb-6">
+              <h2 className="text-lg font-bold text-slate-900">Tu punto de partida</h2>
+              <p className="mt-1 text-sm text-slate-500">
+                Escribe tu ubicación, elígela en el mapa o combina ambas opciones.
+              </p>
+            </div>
             <form onSubmit={handleSearch}>
-              <div className="mb-6 border border-gray-200 rounded-lg p-4">
-                <h3 className="text-base font-semibold text-gray-900 mb-1">
+              <div className="mb-6 rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:p-5">
+                <h3 className="text-base font-bold text-slate-900 mb-1">
                   ¿Desde dónde buscas tu viaje?{' '}
-                  <span className="text-sm text-gray-400 font-normal">(opcional)</span>
+                  <span className="text-sm text-slate-400 font-medium">(opcional)</span>
                 </h3>
-                <p className="text-xs text-gray-500 mb-3">
+                <p className="text-xs text-slate-500 mb-3">
                   Escribe tu ubicación y elige entre las sugerencias que aparecen (aunque no
                   escribas el nombre exacto), selecciona un punto en el mapa, o ambos. Al
                   escribirla la marcamos en el mapa para que la confirmes; si además haces clic
@@ -698,7 +780,7 @@ const SearchTripPage = () => {
 
                 <div className="relative z-20">
                   <Search
-                    className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"
+                    className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"
                     aria-hidden="true"
                   />
                   <input
@@ -712,7 +794,7 @@ const SearchTripPage = () => {
                       void confirmTextLocation(locationText);
                     }}
                     placeholder="Escribe tu ubicación (ej: Arcos de Zapopan)"
-                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                    className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
                   />
 
                   {showSuggestions &&
@@ -720,7 +802,7 @@ const SearchTripPage = () => {
                     // Solo se muestran si corresponden al texto actual (evita
                     // que quede a la vista una lista de lo escrito antes).
                     suggestionsForQuery === locationText.trim() && (
-                      <ul className="absolute left-0 right-0 mt-1 max-h-64 overflow-y-auto bg-white border border-gray-200 rounded-lg shadow-lg">
+                      <ul className="absolute left-0 right-0 mt-1 max-h-64 overflow-y-auto bg-white border border-slate-200 rounded-lg shadow-lg">
                         {suggestions.map((suggestion) => (
                           <li key={`${suggestion.displayName}-${suggestion.lat}`}>
                             <button
@@ -729,9 +811,9 @@ const SearchTripPage = () => {
                               // para que el desplegable no se cierre solo.
                               onMouseDown={(e) => e.preventDefault()}
                               onClick={() => handleSuggestionSelect(suggestion)}
-                              className="flex w-full items-center gap-2 text-left px-4 py-2 text-sm text-gray-700 hover:bg-indigo-50 focus:bg-indigo-50 focus:outline-none"
+                              className="flex w-full items-center gap-2 text-left px-4 py-2 text-sm text-slate-700 hover:bg-teal-500/15 focus:bg-teal-500/15 focus:outline-none"
                             >
-                              <MapPin className="w-4 h-4 shrink-0 text-gray-400" aria-hidden="true" />
+                              <MapPin className="w-4 h-4 shrink-0 text-slate-400" aria-hidden="true" />
                               <span>{suggestion.displayName}</span>
                             </button>
                           </li>
@@ -741,23 +823,23 @@ const SearchTripPage = () => {
                 </div>
 
                 {isLocatingText && (
-                  <p className="flex items-center gap-1.5 text-xs text-indigo-600 mt-2">
+                  <p className="flex items-center gap-1.5 text-xs text-teal-700 mt-2">
                     <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />
                     Ubicando tu texto en el mapa...
                   </p>
                 )}
 
                 {!isLocatingText && isLoadingSuggestions && (
-                  <p className="flex items-center gap-1.5 text-xs text-gray-500 mt-2">
+                  <p className="flex items-center gap-1.5 text-xs text-slate-500 mt-2">
                     <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />
                     Buscando lugares parecidos...
                   </p>
                 )}
 
                 <div className="flex items-center my-4">
-                  <span className="flex-1 border-t border-gray-200"></span>
-                  <span className="text-sm text-gray-400 px-3">o</span>
-                  <span className="flex-1 border-t border-gray-200"></span>
+                  <span className="flex-1 border-t border-slate-200"></span>
+                  <span className="text-sm text-slate-400 px-3">o</span>
+                  <span className="flex-1 border-t border-slate-200"></span>
                 </div>
 
                 <LocationPickerMap
@@ -765,16 +847,20 @@ const SearchTripPage = () => {
                   centerLng={-103.35}
                   zoom={12}
                   selected={mapPick ?? textPick}
+                  selectedLabel="Mi punto de salida"
                   focus={focusPoint}
                   onPick={handleMapPick}
-                  className="rounded-lg border border-gray-300"
+                  tripOrigins={tripOriginMarkers}
+                  onTripOriginClick={handleTripOriginClick}
+                  className="rounded-lg border border-slate-300"
                   style={{ height: '280px', width: '100%' }}
                 />
-                <p className="flex items-start gap-1.5 text-xs text-gray-500 mt-2">
+                <p className="flex items-start gap-1.5 text-xs text-slate-500 mt-2">
                   <Info className="w-3.5 h-3.5 shrink-0 mt-0.5" aria-hidden="true" />
                   <span>
-                    Haz clic en el mapa para señalar tu punto de partida. La ubicación que
-                    escribas también se marca aquí para que la confirmes.
+                    Haz clic en el mapa para marcar ★ tu punto de salida: la búsqueda y las
+                    solicitudes lo usan automáticamente. Los puntos ● son los orígenes de los
+                    viajes disponibles. La ubicación que escribas también se marca aquí.
                   </span>
                 </p>
 
@@ -782,28 +868,32 @@ const SearchTripPage = () => {
                   <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg">
                     <p className="flex items-center gap-1.5 text-sm text-green-800 font-medium">
                       <MapPin className="w-4 h-4 shrink-0" aria-hidden="true" />
-                      Ubicación seleccionada en el mapa
+                      Mi punto de salida
                     </p>
                     <p className="text-xs text-green-700 mt-1">
                       Lat {mapPick.lat.toFixed(5)} · Lng {mapPick.lng.toFixed(5)}
                     </p>
-                    {textPick && (
+                    {mapPickAddress && (
                       <p className="text-xs text-green-700 mt-1">
-                        El punto del mapa tiene prioridad sobre el texto escrito.
+                        Ubicación seleccionada: {mapPickAddress}
                       </p>
                     )}
+                    <p className="text-xs text-green-700 mt-1">
+                      Se usará automáticamente al solicitar un viaje.
+                      {textPick && ' El punto del mapa tiene prioridad sobre el texto escrito.'}
+                    </p>
                   </div>
                 ) : textPick ? (
-                  <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                    <p className="flex items-center gap-1.5 text-sm text-blue-800 font-medium">
+                  <div className="mt-3 rounded-xl border border-teal-500/30 bg-teal-50 p-4">
+                    <p className="flex items-center gap-1.5 text-sm font-semibold text-teal-700">
                       <CheckCircle2 className="w-4 h-4 shrink-0" aria-hidden="true" />
                       Confirmamos tu texto en el mapa
                     </p>
-                    <p className="text-xs text-blue-700 mt-1">{textPick.name}</p>
-                    <p className="text-xs text-blue-700 mt-1">
+                    <p className="mt-1 text-xs text-slate-500">{textPick.name}</p>
+                    <p className="mt-1 text-xs text-slate-500">
                       Lat {textPick.lat.toFixed(5)} · Lng {textPick.lng.toFixed(5)}
                     </p>
-                    <p className="text-xs text-blue-700 mt-1">
+                    <p className="mt-1 text-xs text-slate-500">
                       Si el punto no es correcto, haz clic en el mapa para ajustarlo.
                     </p>
                   </div>
@@ -833,7 +923,7 @@ const SearchTripPage = () => {
                   value={date}
                   onChange={(e) => setDate(e.target.value)}
                 />
-                <div className="flex items-center gap-2 rounded-lg border border-indigo-100 bg-indigo-50 px-4 py-3 text-sm text-indigo-700">
+                <div className="flex items-center gap-2 rounded-lg border border-teal-500/30 bg-teal-50 px-4 py-3 text-sm text-teal-700">
                   <MapPin className="w-4 h-4 shrink-0" aria-hidden="true" />
                   Todos los viajes tienen como destino CUCEI.
                 </div>
@@ -867,52 +957,52 @@ const SearchTripPage = () => {
 
           {/* Resultados de búsqueda */}
           {hasSearched && (
-<div>
-              <h2 className="text-2xl font-bold text-gray-900 mb-6">
-                Viajes Disponibles
-                <span className="text-indigo-600 ml-2">({trips.length})</span>
-              </h2>
+            <div>
+              <div className="mb-6">
+                <h2 className="text-2xl font-extrabold tracking-tight text-slate-900">
+                  Viajes disponibles{' '}
+                  <span className="text-teal-700">({trips.length})</span>
+                </h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  Haz clic en un viaje para ver su ruta en el mapa y solicitar tu lugar.
+                </p>
+              </div>
 
               {isShowingAllTrips && (
-                <p className="flex items-center gap-1.5 mb-3 text-sm text-indigo-600">
-                  <List className="w-4 h-4 shrink-0" aria-hidden="true" />
-                  Mostrando todos los viajes publicados, ordenados por fecha.
-                </p>
+                <div className="mb-4">
+                  <Alert type="info">Mostrando todos los viajes publicados, ordenados por fecha.</Alert>
+                </div>
               )}
               {geoSearchInfo && (
-                <p className="flex items-center gap-1.5 mb-3 text-sm text-indigo-600">
-                  {geoSearchInfo.type === 'map' ? (
-                    <>
-                      <MapPin className="w-4 h-4 shrink-0" aria-hidden="true" />
-                      Buscando viajes cerca de {geoSearchInfo.name} (ruta a {SEARCH_RADIUS_KM} km · origen a {ORIGIN_RADIUS_KM} km).
-                    </>
-                  ) : (
-                    <>
-                      <Search className="w-4 h-4 shrink-0" aria-hidden="true" />
-                      Buscando viajes cerca de «{geoSearchInfo.name}» (ruta a {SEARCH_RADIUS_KM} km · origen a {ORIGIN_RADIUS_KM} km).
-                    </>
-                  )}
-                </p>
+                <div className="mb-4">
+                  <Alert type="info">
+                    Buscando viajes cerca de «{geoSearchInfo.name}» (ruta a {SEARCH_RADIUS_KM} km · origen a {ORIGIN_RADIUS_KM} km).
+                  </Alert>
+                </div>
               )}
               {geocodingNotice && (
-                <p className="flex items-start gap-1.5 mb-3 text-sm text-yellow-700">
-                  <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" aria-hidden="true" />
-                  <span>{geocodingNotice}</span>
-                </p>
+                <div className="mb-4">
+                  <Alert type="warning">{geocodingNotice}</Alert>
+                </div>
+              )}
+              {originRequiredNotice && selectedOrigin === null && (
+                <div className="mb-4">
+                  <Alert type="warning">{originRequiredNotice}</Alert>
+                </div>
               )}
 
               {/* Ruta del viaje seleccionado: aparece al hacer clic en un resultado, sin
                   repetir la búsqueda. Conserva el punto original del pasajero y, si
                   procede, marca el punto de recogida ajustado sobre la ruta. */}
               {!isLoading && trips.length > 0 && mapTrip && (
-                <Card className="p-4 mb-6">
+                <Card className="p-4 sm:p-5 mb-6">
                   <div className="flex items-start justify-between gap-3 mb-3">
                     <div>
-                      <h3 className="text-base font-semibold text-gray-900 flex items-center gap-1.5">
-                        <Route className="w-4 h-4 text-indigo-600" aria-hidden="true" />
+                      <h3 className="text-base font-bold text-slate-900 flex items-center gap-1.5">
+                        <Route className="w-4 h-4 text-teal-700" aria-hidden="true" />
                         Ruta del viaje seleccionado
                       </h3>
-                      <p className="text-xs text-gray-600 mt-1">
+                      <p className="text-xs text-slate-500 mt-1">
                         {mapTrip.origin} → {mapTrip.destination}
                       </p>
                     </div>
@@ -938,25 +1028,37 @@ const SearchTripPage = () => {
                           ? `Punto de recogida (a ${formatDistance(pickupInfo.distanceKm * 1000)})`
                           : 'Punto de recogida sobre la ruta'
                       }
-                      className="rounded-lg border border-gray-300"
+                      tripOrigins={tripOriginMarkers}
+                      onTripOriginClick={handleTripOriginClick}
+                      className="rounded-lg border border-slate-300"
                       style={{ height: '320px', width: '100%' }}
                     />
                   ) : (
-                    <p className="text-sm text-gray-500">
+                    <p className="text-sm text-slate-500">
                       Este viaje no tiene la geometría de la ruta guardada, así que solo se pueden
                       mostrar tu punto de partida y los datos del viaje.
                     </p>
                   )}
 
                   {/* Leyenda: punto original → distancia de ajuste → punto sobre la ruta */}
-                  <div className="mt-3 grid gap-3 sm:grid-cols-3 text-xs text-gray-600">
+                  <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4 text-xs text-slate-500">
+                    <div className="flex items-start gap-2">
+                      <span
+                        className="mt-1 h-3 w-3 shrink-0 rounded-full bg-indigo-500 border-2 border-white shadow"
+                        aria-hidden="true"
+                      />
+                      <div>
+                        <p className="font-medium text-slate-900">Origen de los viajes</p>
+                        <p>Punto de salida del conductor (●)</p>
+                      </div>
+                    </div>
                     <div className="flex items-start gap-2">
                       <span
                         className="mt-1 h-3 w-3 shrink-0 rounded-full bg-green-600 border-2 border-white shadow"
                         aria-hidden="true"
                       />
                       <div>
-                        <p className="font-medium text-gray-900">Tu punto de partida</p>
+                        <p className="font-medium text-slate-900">Tu punto de partida</p>
                         <p>
                           {searchPoint
                             ? `Lat ${searchPoint.lat.toFixed(5)} · Lng ${searchPoint.lng.toFixed(5)}`
@@ -970,7 +1072,7 @@ const SearchTripPage = () => {
                         aria-hidden="true"
                       />
                       <div>
-                        <p className="font-medium text-gray-900">Punto de recogida sobre la ruta</p>
+                        <p className="font-medium text-slate-900">Punto de recogida sobre la ruta</p>
                         <p>
                           {pickupInfo
                             ? pickupPoint
@@ -981,9 +1083,9 @@ const SearchTripPage = () => {
                       </div>
                     </div>
                     <div className="flex items-start gap-2">
-                      <span className="mt-2 h-1 w-5 shrink-0 rounded bg-indigo-600" aria-hidden="true" />
+                      <span className="mt-2 h-1 w-5 shrink-0 rounded bg-slate-900" aria-hidden="true" />
                       <div>
-                        <p className="font-medium text-gray-900">Ruta del conductor</p>
+                        <p className="font-medium text-slate-900">Ruta del conductor</p>
                         <p>
                           {mapTrip.routeGeometry
                             ? `${mapTrip.routeGeometry.coordinates.length} puntos de la ruta origen → CUCEI`
@@ -996,7 +1098,7 @@ const SearchTripPage = () => {
               )}
 
               {!isLoading && trips.length > 0 && !mapTrip && (
-                <p className="flex items-center gap-1.5 mb-3 text-sm text-gray-500">
+                <p className="flex items-center gap-1.5 mb-4 text-sm text-slate-500">
                   <Route className="w-4 h-4 shrink-0" aria-hidden="true" />
                   Haz clic en un viaje para ver su ruta en el mapa.
                 </p>
@@ -1004,42 +1106,32 @@ const SearchTripPage = () => {
               {isLoading ? (
                 <Card className="p-12 text-center">
                   <div className="flex flex-col items-center justify-center">
-                    <svg className="animate-spin h-12 w-12 text-indigo-600 mb-4" fill="none" viewBox="0 0 24 24">
+                    <svg className="animate-spin h-12 w-12 text-teal-700 mb-4" fill="none" viewBox="0 0 24 24">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
-                    <p className="text-gray-600">Buscando viajes...</p>
+                    <p className="text-slate-500">Buscando viajes...</p>
                   </div>
                 </Card>
               ) : error ? (
-                <Card className="p-12 text-center bg-red-50">
-                  <svg className="w-16 h-16 text-red-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <h3 className="text-xl font-semibold text-gray-900 mb-2">
-                    Error en la búsqueda
-                  </h3>
-                  <p className="text-gray-600">{error}</p>
+                <Card className="p-8 sm:p-10">
+                  <Alert type="error">{error}</Alert>
                 </Card>
               ) : trips.length === 0 ? (
-                <Card className="p-12 text-center">
-                  <svg className="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <h3 className="text-xl font-semibold text-gray-900 mb-2">
-                    No se encontraron viajes
-                  </h3>
-                  <p className="text-gray-600">
-                    Intenta con otra fecha o con otra ubicación de origen. ¡O considera ofrecer un viaje tú mismo!
-                  </p>
-                </Card>
+                <EmptyState
+                  icon={Car}
+                  title="No se encontraron viajes"
+                  description="Intenta con otra fecha u origen, o publica tu propio viaje para llegar a CUCEI."
+                  actionLabel="Ofrecer un viaje"
+                  actionTo="/ofrecer-viaje"
+                />
               ) : (
-<div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {trips.map((trip) => (
                     <Card
                       key={trip.id}
                       className={`p-6 hover cursor-pointer ${
-                        mapTrip?.id === trip.id ? 'ring-2 ring-indigo-500' : ''
+                        mapTrip?.id === trip.id ? 'ring-2 ring-teal-500' : ''
                       }`}
                       hover
                       onClick={() => handleSelectTripOnMap(trip)}
@@ -1050,27 +1142,23 @@ const SearchTripPage = () => {
                             <svg className="w-5 h-5 text-green-500 mr-2" fill="currentColor" viewBox="0 0 20 20">
                               <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                             </svg>
-                            <span className="text-sm font-medium text-gray-600">{trip.origin}</span>
+                            <span className="text-sm font-medium text-slate-600">{trip.origin}</span>
                           </div>
                           <div className="flex items-center">
                             <svg className="w-5 h-5 text-red-500 mr-2" fill="currentColor" viewBox="0 0 20 20">
                               <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
                             </svg>
-                            <span className="text-sm font-medium text-gray-600">{trip.destination}</span>
+                            <span className="text-sm font-medium text-slate-600">{trip.destination}</span>
                           </div>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-2xl font-bold text-indigo-600">${trip.price}</p>
-                          <p className="text-sm text-gray-500">por persona</p>
                         </div>
                       </div>
 
                       <div className="grid grid-cols-2 gap-4 mb-4">
                         <div className="flex items-center">
-                          <svg className="w-5 h-5 text-gray-400 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <svg className="w-5 h-5 text-slate-400 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                           </svg>
-                          <span className="text-sm text-gray-600">
+                          <span className="text-sm text-slate-600">
                             {new Date(trip.date).toLocaleDateString('es-MX', {
                               weekday: 'short',
                               year: 'numeric',
@@ -1080,16 +1168,16 @@ const SearchTripPage = () => {
                           </span>
                         </div>
                         <div className="flex items-center">
-                          <svg className="w-5 h-5 text-gray-400 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <svg className="w-5 h-5 text-slate-400 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                           </svg>
-                          <span className="text-sm text-gray-600">{trip.time}</span>
+                          <span className="text-sm text-slate-600">{trip.time}</span>
                         </div>
                       </div>
 
                       <div className="mt-3 flex flex-wrap gap-2">
                         {trip.matchType === 'textual' && (
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-indigo-50 text-indigo-700 border border-indigo-200">
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-teal-500/15 text-teal-800 border border-teal-500/30">
                             <Type className="w-3.5 h-3.5" aria-hidden="true" />
                             Coincidencia por texto
                           </span>
@@ -1111,18 +1199,18 @@ const SearchTripPage = () => {
                       <div className="border-t pt-4 mb-4">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center">
-                            <div className="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center mr-3">
-                              <span className="text-indigo-600 font-semibold">
+                            <div className="w-10 h-10 bg-teal-500/15 rounded-full flex items-center justify-center mr-3">
+                              <span className="text-teal-700 font-semibold">
                                 {trip.driver.name.charAt(0)}
                               </span>
                             </div>
                             <div>
-                              <p className="font-medium text-gray-900">{trip.driver.name}</p>
-                              <p className="text-sm text-gray-500">{trip.driver.university}</p>
+                              <p className="font-medium text-slate-900">{trip.driver.name}</p>
+                              <p className="text-sm text-slate-500">{trip.driver.university}</p>
                               <Link
                                 to={`/perfil/${trip.driver.id}`}
                                 onClick={(e) => e.stopPropagation()}
-                                className="inline-flex items-center gap-1 mt-1 text-sm font-medium text-indigo-600 hover:text-indigo-700"
+                                className="inline-flex items-center gap-1 mt-1 text-sm font-medium text-teal-700 hover:text-teal-800"
                               >
                                 <Eye className="w-4 h-4" aria-hidden="true" /> Ver perfil
                               </Link>
@@ -1132,17 +1220,17 @@ const SearchTripPage = () => {
                             <svg className="w-5 h-5 text-yellow-400 mr-1" fill="currentColor" viewBox="0 0 20 20">
                               <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
                             </svg>
-                            <span className="font-medium text-gray-900">{trip.driver.rating}</span>
+                            <span className="font-medium text-slate-900">{trip.driver.rating}</span>
                           </div>
                         </div>
                       </div>
 
                       <div className="flex items-center justify-between border-t pt-4">
                         <div className="flex items-center">
-                          <svg className="w-5 h-5 text-indigo-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <svg className="w-5 h-5 text-teal-700 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
                           </svg>
-                          <span className="text-sm text-gray-600">
+                          <span className="text-sm text-slate-600">
                             {trip.seatsAvailable} {trip.seatsAvailable === 1 ? 'lugar disponible' : 'lugares disponibles'}
                           </span>
                         </div>
@@ -1154,13 +1242,13 @@ const SearchTripPage = () => {
               )}
             </div>
           )}
-{/* Información adicional */}
+          {/* Información adicional */}
           {!hasSearched && (
-            <Card className="p-8 bg-gradient-to-r from-indigo-50 to-purple-50 text-center">
-              <h3 className="text-xl font-semibold text-gray-900 mb-2">
+            <Card className="p-8 bg-gradient-to-r from-slate-50 to-teal-500/10 text-center">
+              <h3 className="text-xl font-semibold text-slate-900 mb-2">
                 ¿No encuentras lo que buscas?
               </h3>
-              <p className="text-gray-600 mb-4">
+              <p className="text-slate-600 mb-4">
                 Considera ofrecer un viaje tú mismo y ayuda a otros estudiantes a llegar a su destino.
               </p>
               <Button variant="outline" size="lg">
@@ -1169,82 +1257,43 @@ const SearchTripPage = () => {
             </Card>
           )}
         </div>
-      </div>
 
-      {/* Modal de solicitud de lugar */}
+      {/* Modal de solicitud de lugar: usa el punto elegido en el mapa, sin
+          volver a preguntar el origen. */}
       <Modal open={selectedTrip !== null} onClose={closeModal} title="Solicitar lugar">
-        {selectedTrip && (
+        {selectedTrip && selectedOrigin && (
           <div>
-            <p className="text-sm text-gray-600 mb-4">
+            <p className="text-sm text-slate-500 mb-4">
               Viaje:{' '}
-              <span className="font-semibold text-gray-900">
+              <span className="font-bold text-slate-900">
                 {selectedTrip.origin} → CUCEI
               </span>
             </p>
 
             {modalError && (
-              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
-                <p className="text-sm text-red-700">{modalError}</p>
+              <div className="mb-4">
+                <Alert type="error">{modalError}</Alert>
               </div>
             )}
 
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Dirección de recogida
-            </label>
-            <div className="flex gap-2 mb-1">
-              <input
-                type="text"
-                value={pickupQuery}
-                onChange={(e) => setPickupQuery(e.target.value)}
-                placeholder="Ej: Av. Vallarta 1234, Guadalajara, Jalisco"
-                disabled={isSubmittingRequest}
-                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-              />
-              <Button
-                type="button"
-                onClick={handleSearchPickup}
-                disabled={isSearchingPickup || isSubmittingRequest}
-                variant="primary"
-              >
-                {isSearchingPickup ? 'Buscando...' : 'Buscar'}
-              </Button>
+            {/* Origen tomado automáticamente del mapa: el formulario de
+                "dirección de recogida" se eliminó para no volver a preguntar. */}
+            <div className="rounded-xl border border-teal-500/30 bg-teal-50 p-4 mb-4">
+              <p className="flex items-center gap-1.5 text-sm font-semibold text-teal-700">
+                <MapPin className="w-4 h-4 shrink-0" aria-hidden="true" />
+                Mi punto de salida
+              </p>
+              <p className="mt-1 text-sm text-slate-700">{selectedOriginLabel}</p>
+              <p className="mt-1 text-xs text-slate-500">
+                Lat {selectedOrigin.lat.toFixed(5)} · Lng {selectedOrigin.lng.toFixed(5)}
+              </p>
+              <p className="mt-2 text-xs text-slate-500">
+                Se usará automáticamente para esta solicitud. Para cambiarlo, cierra esta
+                ventana y haz clic en otro punto del mapa.
+              </p>
             </div>
-            <p className="text-xs text-gray-500 mb-3">
-              Buscamos tu dirección en OpenStreetMap para que el conductor sepa dónde recogerte.
-            </p>
 
-            {pickupError && (
-              <p className="mt-1 text-sm text-red-600">{pickupError}</p>
-            )}
-
-            {pickupResults.length > 0 && (
-              <div className="mt-2 mb-3 bg-white border border-gray-200 rounded-lg shadow-sm max-h-48 overflow-y-auto">
-                <p className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-50">
-                  Selecciona tu dirección:
-                </p>
-                {pickupResults.map((result) => (
-                  <button
-                    key={result.place_id}
-                    type="button"
-                    onClick={() => handleSelectPickup(result)}
-                    className="w-full text-left px-4 py-3 hover:bg-gray-50 border-b border-gray-100 last:border-b-0 transition-colors"
-                  >
-                    <p className="text-sm text-gray-800">{result.display_name}</p>
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {selectedPickup && (
-              <div className="mt-3 mb-3 p-3 bg-green-50 border border-green-200 rounded-lg">
-                <p className="flex items-start gap-1.5 text-sm text-green-800">
-                  <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" aria-hidden="true" />
-                  <span>Dirección seleccionada: {selectedPickup.address}</span>
-                </p>
-              </div>
-            )}
-
-            <div className="mt-6 flex justify-end gap-3">
+            <div className="flex justify-end gap-3">
               <Button
                 type="button"
                 variant="outline"
@@ -1257,7 +1306,7 @@ const SearchTripPage = () => {
                 type="button"
                 variant="primary"
                 onClick={handleSubmitRequest}
-                disabled={!selectedPickup || isSubmittingRequest || isSearchingPickup}
+                disabled={isSubmittingRequest}
               >
                 {isSubmittingRequest ? 'Enviando...' : 'Solicitar lugar'}
               </Button>
@@ -1266,8 +1315,7 @@ const SearchTripPage = () => {
         )}
       </Modal>
 
-      <Footer />
-    </div>
+    </AppShell>
   );
 };
 

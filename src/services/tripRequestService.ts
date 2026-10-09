@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { isTripPast } from './tripService';
 
 export type TripRequestStatus = 'pending' | 'accepted' | 'rejected' | 'cancelled';
 
@@ -40,7 +41,6 @@ export interface TripRequestDetails {
   destination: string;
   date: string;
   time: string;
-  price: number;
   trip_seats_available: number;
   passenger_name: string;
   passenger_email: string | null;
@@ -61,8 +61,15 @@ export interface MyRequestedTrip {
   destination: string;
   date: string;
   time: string;
-  price: number;
   trip_seats_available: number;
+  /**
+   * Status del viaje (trips.status): puede ser 'active',
+   * 'pending_completion' o 'completed'. Se completa en getMyRequestedTrips
+   * consultando la tabla trips, porque la vista no lo expone.
+   */
+  trip_status: string;
+  /** Duración estimada de la ruta del viaje (para el fin programado). */
+  trip_route_duration_minutes: number | null;
 }
 
 const NOT_AUTHENTICATED_MESSAGE =
@@ -167,7 +174,7 @@ const mapDatabaseError = (
  *
  * Verifica (en este orden):
  * 1. Sesión de Supabase Auth.
- * 2. Que el viaje exista y esté activo.
+ * 2. Que el viaje exista, esté activo y su salida aún no haya pasado.
  * 3. Que el solicitante no sea el conductor del viaje.
  * 4. Que el viaje tenga asientos disponibles.
  * 5. Que no exista una solicitud previa del pasajero para ese viaje.
@@ -183,7 +190,7 @@ export const createTripRequest = async (
 
   const { data: trip, error: tripError } = await supabase
     .from('trips')
-    .select('id, driver_id, status, seats_available')
+    .select('id, driver_id, status, seats_available, date, time')
     .eq('id', params.tripId)
     .single();
 
@@ -197,6 +204,10 @@ export const createTripRequest = async (
 
   if (trip.status !== 'active') {
     throw new Error('Este viaje ya no está activo.');
+  }
+
+  if (isTripPast(trip.date, trip.time)) {
+    throw new Error('Este viaje ya salió y ya no acepta solicitudes.');
   }
 
   if (trip.seats_available <= 0) {
@@ -277,7 +288,7 @@ export const getMyRequestedTrips = async (): Promise<MyRequestedTrip[]> => {
   const { data, error } = await supabase
     .from('trip_requests_details')
     .select(
-      'id, trip_id, driver_id, driver_name, driver_rating, status, pickup_address, origin, destination, date, time, price, trip_seats_available'
+      'id, trip_id, driver_id, driver_name, driver_rating, status, pickup_address, origin, destination, date, time, trip_seats_available'
     )
     .eq('passenger_id', passengerId)
     .order('created_at', { ascending: false });
@@ -287,7 +298,49 @@ export const getMyRequestedTrips = async (): Promise<MyRequestedTrip[]> => {
     throw error;
   }
 
-  return (data || []) as MyRequestedTrip[];
+  const requestedTrips = (data || []) as MyRequestedTrip[];
+
+  // Etapa 2 del ciclo de vida: la vista trip_requests_details no expone
+  // trips.status, así que el estado y la duración del viaje se completan con
+  // una consulta a trips. La política RLS de add_trip_completion permite a un
+  // pasajero 'accepted' leer su viaje en cualquier estado; si esa migración
+  // aún no está aplicada se usa 'active' como respaldo para no romper la vista.
+  const tripIds = [...new Set(requestedTrips.map((request) => request.trip_id))];
+  const tripMetaById = new Map<string, { status: string; durationMinutes: number | null }>();
+
+  if (tripIds.length > 0) {
+    const { data: tripsData, error: tripsError } = await supabase
+      .from('trips')
+      .select('id, status, route_duration_minutes')
+      .in('id', tripIds);
+
+    if (tripsError) {
+      console.warn(
+        'No se pudo leer el estado de los viajes solicitados (se asume activo):',
+        tripsError.message
+      );
+    } else {
+      for (const row of (tripsData ?? []) as {
+        id: string;
+        status: string;
+        route_duration_minutes: number | null;
+      }[]) {
+        tripMetaById.set(row.id, {
+          status: row.status,
+          durationMinutes: row.route_duration_minutes,
+        });
+      }
+    }
+  }
+
+  return requestedTrips.map((request) => {
+    const meta = tripMetaById.get(request.trip_id);
+    return {
+      ...request,
+      trip_status: meta?.status ?? 'active',
+      trip_route_duration_minutes: meta?.durationMinutes ?? null,
+    };
+  });
 };
 
 /**

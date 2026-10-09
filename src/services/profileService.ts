@@ -37,6 +37,13 @@ export interface PublicCar {
 export interface UserTripStats {
   offeredTrips: number;
   passengerTrips: number;
+  /**
+   * Etapa 3: viajes COMPLETADOS (regla efectiva del ciclo de vida) en los que
+   * participó, como conductor o como pasajero aceptado. Los viajes cancelados
+   * nunca se cuentan aquí. Es aditivo: offeredTrips/passengerTrips conservan
+   * su significado original.
+   */
+  completedTrips: number;
 }
 
 /** Calificacion recibida enriquecida (RPC get_user_received_ratings). */
@@ -134,6 +141,11 @@ export const getUserRatingSummary = async (
   return { rating: profile.rating ?? 0, totalRatings: profile.total_ratings ?? 0 };
 };
 
+/**
+ * Estadísticas de viajes del usuario (RPC get_user_trip_stats).
+ * Etapa 3: el RPC agrega completedTrips; si la migración aún no está aplicada
+ * la columna no llega y se asume 0 (la interfaz sigue funcionando).
+ */
 export const getUserTripStats = async (userId: string): Promise<UserTripStats> => {
   const { data, error } = await supabase.rpc('get_user_trip_stats', { p_user_id: userId });
   if (error) {
@@ -143,10 +155,12 @@ export const getUserTripStats = async (userId: string): Promise<UserTripStats> =
   const row = (Array.isArray(data) ? data[0] : data) as {
     offered_trips: number | string;
     passenger_trips: number | string;
+    completed_trips?: number | string | null;
   } | null;
   return {
     offeredTrips: Number(row?.offered_trips ?? 0),
     passengerTrips: Number(row?.passenger_trips ?? 0),
+    completedTrips: Number(row?.completed_trips ?? 0),
   };
 };
 

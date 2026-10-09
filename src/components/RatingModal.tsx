@@ -39,9 +39,9 @@ const RatingModal = ({
   return (
     <Modal open={open} onClose={onClose} title={title}>
       <div>
-        <p className="text-sm text-gray-600 mb-4">
+        <p className="text-sm text-slate-600 mb-4">
           Calificando a{' '}
-          <span className="font-semibold text-gray-900">{ratedPersonName}</span>
+          <span className="font-semibold text-slate-900">{ratedPersonName}</span>
         </p>
 
         {error && (
@@ -51,12 +51,12 @@ const RatingModal = ({
         )}
 
         <div className="mb-4">
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+          <label className="block text-sm font-medium text-slate-700 mb-2">
             Tu calificación
           </label>
           <StarRating value={rating} onChange={setRating} size="lg" />
           {rating === 0 && (
-            <p className="mt-1 text-xs text-gray-500">
+            <p className="mt-1 text-xs text-slate-500">
               Selecciona de 1 a 5 estrellas
             </p>
           )}

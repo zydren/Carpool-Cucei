@@ -84,16 +84,16 @@ const ContactPage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-slate-50">
       <Navbar />
       
       <div className="pt-24 pb-16">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
-            <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4">
+            <h1 className="text-4xl md:text-5xl font-bold text-slate-900 mb-4">
               Contacto
             </h1>
-            <p className="text-xl text-gray-600 max-w-3xl mx-auto">
+            <p className="text-xl text-slate-600 max-w-3xl mx-auto">
               ¿Tienes preguntas o sugerencias? Estamos aquí para ayudarte. Envíanos un mensaje y te responderemos lo antes posible.
             </p>
           </div>
@@ -102,71 +102,71 @@ const ContactPage = () => {
             {/* Información de contacto */}
             <div>
               <Card className="p-8 mb-8">
-                <h2 className="text-2xl font-bold text-gray-900 mb-6">Información de Contacto</h2>
+                <h2 className="text-2xl font-bold text-slate-900 mb-6">Información de Contacto</h2>
                 
                 <div className="space-y-6">
                   <div className="flex items-start">
-                    <div className="flex-shrink-0 w-12 h-12 bg-indigo-100 text-indigo-600 rounded-lg flex items-center justify-center mr-4">
+                    <div className="flex-shrink-0 w-12 h-12 bg-teal-500/15 text-teal-700 rounded-lg flex items-center justify-center mr-4">
                       <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                       </svg>
                     </div>
                     <div>
-                      <h3 className="font-semibold text-gray-900 mb-1">Correo Electrónico</h3>
-                      <p className="text-gray-600">contacto@carpool-universitario.com</p>
+                      <h3 className="font-semibold text-slate-900 mb-1">Correo Electrónico</h3>
+                      <p className="text-slate-600">contacto@carpool-universitario.com</p>
                     </div>
                   </div>
 
                   <div className="flex items-start">
-                    <div className="flex-shrink-0 w-12 h-12 bg-indigo-100 text-indigo-600 rounded-lg flex items-center justify-center mr-4">
+                    <div className="flex-shrink-0 w-12 h-12 bg-teal-500/15 text-teal-700 rounded-lg flex items-center justify-center mr-4">
                       <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                       </svg>
                     </div>
                     <div>
-                      <h3 className="font-semibold text-gray-900 mb-1">Ubicación</h3>
-                      <p className="text-gray-600">Plataforma web disponible para estudiantes universitarios de todo el país</p>
+                      <h3 className="font-semibold text-slate-900 mb-1">Ubicación</h3>
+                      <p className="text-slate-600">Plataforma web disponible para estudiantes universitarios de todo el país</p>
                     </div>
                   </div>
 
                   <div className="flex items-start">
-                    <div className="flex-shrink-0 w-12 h-12 bg-indigo-100 text-indigo-600 rounded-lg flex items-center justify-center mr-4">
+                    <div className="flex-shrink-0 w-12 h-12 bg-teal-500/15 text-teal-700 rounded-lg flex items-center justify-center mr-4">
                       <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
                     </div>
                     <div>
-                      <h3 className="font-semibold text-gray-900 mb-1">Horario de Respuesta</h3>
-                      <p className="text-gray-600">Lunes a Viernes: 9:00 AM - 6:00 PM</p>
+                      <h3 className="font-semibold text-slate-900 mb-1">Horario de Respuesta</h3>
+                      <p className="text-slate-600">Lunes a Viernes: 9:00 AM - 6:00 PM</p>
                     </div>
                   </div>
                 </div>
               </Card>
 
-              <Card className="p-8 bg-gradient-to-br from-indigo-50 to-purple-50">
-                <h3 className="text-xl font-semibold text-gray-900 mb-4">¿Por qué contactarnos?</h3>
+              <Card className="p-8 bg-gradient-to-br from-slate-50 to-teal-500/10">
+                <h3 className="text-xl font-semibold text-slate-900 mb-4">¿Por qué contactarnos?</h3>
                 <ul className="space-y-3">
-                  <li className="flex items-center text-gray-600">
-                    <svg className="w-5 h-5 text-indigo-600 mr-3" fill="currentColor" viewBox="0 0 20 20">
+                  <li className="flex items-center text-slate-600">
+                    <svg className="w-5 h-5 text-teal-700 mr-3" fill="currentColor" viewBox="0 0 20 20">
                       <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                     </svg>
                     Reportar problemas técnicos
                   </li>
-                  <li className="flex items-center text-gray-600">
-                    <svg className="w-5 h-5 text-indigo-600 mr-3" fill="currentColor" viewBox="0 0 20 20">
+                  <li className="flex items-center text-slate-600">
+                    <svg className="w-5 h-5 text-teal-700 mr-3" fill="currentColor" viewBox="0 0 20 20">
                       <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                     </svg>
                     Sugerencias de mejora
                   </li>
-                  <li className="flex items-center text-gray-600">
-                    <svg className="w-5 h-5 text-indigo-600 mr-3" fill="currentColor" viewBox="0 0 20 20">
+                  <li className="flex items-center text-slate-600">
+                    <svg className="w-5 h-5 text-teal-700 mr-3" fill="currentColor" viewBox="0 0 20 20">
                       <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                     </svg>
                     Preguntas sobre la plataforma
                   </li>
-                  <li className="flex items-center text-gray-600">
-                    <svg className="w-5 h-5 text-indigo-600 mr-3" fill="currentColor" viewBox="0 0 20 20">
+                  <li className="flex items-center text-slate-600">
+                    <svg className="w-5 h-5 text-teal-700 mr-3" fill="currentColor" viewBox="0 0 20 20">
                       <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                     </svg>
                     Colaboraciones universitarias
@@ -178,7 +178,7 @@ const ContactPage = () => {
             {/* Formulario de contacto */}
             <div>
               <Card className="p-8">
-                <h2 className="text-2xl font-bold text-gray-900 mb-6">Envíanos un Mensaje</h2>
+                <h2 className="text-2xl font-bold text-slate-900 mb-6">Envíanos un Mensaje</h2>
                 
                 {submitStatus === 'success' ? (
                   <div className="bg-green-50 border border-green-200 rounded-lg p-6 text-center">

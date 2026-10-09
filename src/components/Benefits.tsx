@@ -2,7 +2,7 @@ const Benefits = () => {
   const benefits = [
     {
       title: 'Ahorra dinero',
-      description: 'Divide los costos de combustible, peajes y estacionamiento con otros estudiantes.',
+      description: 'Los viajes son gratuitos: comparte el trayecto sin pagar nada.',
       icon: (
         <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -57,30 +57,33 @@ const Benefits = () => {
   ];
 
   return (
-    <section id="beneficios" className="py-20 bg-gray-50">
+    <section id="beneficios" className="py-16 sm:py-20 bg-slate-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="text-center mb-16">
-          <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
-            Beneficios de usar Carpool Universitario
+        <div className="max-w-2xl mb-12">
+          <p className="text-xs font-bold uppercase tracking-[0.18em] text-teal-700">
+            Beneficios
+          </p>
+          <h2 className="mt-2 text-3xl md:text-4xl font-extrabold tracking-tight text-slate-900">
+            Por qué viajar en carpool
           </h2>
-          <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-            Descubre por qué miles de estudiantes universitarios ya confían en nosotros.
+          <p className="mt-3 text-lg text-slate-500">
+            Ahorro, seguridad y comunidad en cada trayecto hacia la universidad.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {benefits.map((benefit, index) => (
             <div
               key={index}
-              className="bg-white rounded-xl p-8 shadow-md hover:shadow-xl transition-shadow duration-300"
+              className="bg-white rounded-2xl border border-slate-200 p-6 sm:p-8 shadow-[0_1px_2px_rgba(15,23,42,0.05)] transition-all duration-200 hover:-translate-y-1 hover:shadow-[0_12px_28px_rgba(15,23,42,0.1)] hover:border-teal-500/40"
             >
-              <div className="inline-flex items-center justify-center w-14 h-14 bg-indigo-100 text-indigo-600 rounded-lg mb-6">
+              <div className="inline-flex items-center justify-center w-12 h-12 bg-teal-500/15 text-teal-700 rounded-xl mb-5">
                 {benefit.icon}
               </div>
-              <h3 className="text-xl font-semibold text-gray-900 mb-3">
+              <h3 className="text-lg font-bold text-slate-900 mb-2">
                 {benefit.title}
               </h3>
-              <p className="text-gray-600">
+              <p className="text-sm text-slate-500 leading-relaxed">
                 {benefit.description}
               </p>
             </div>

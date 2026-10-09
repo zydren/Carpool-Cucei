@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
-import HomePage from './pages/HomePage';
+import HomeRoute from './pages/HomeRoute';
 import HowItWorksPage from './pages/HowItWorksPage';
 import SecurityPage from './pages/SecurityPage';
 import FAQPage from './pages/FAQPage';
@@ -16,12 +16,14 @@ import ResetPasswordPage from './pages/ResetPasswordPage';
 import TripDetailPage from './pages/TripDetailPage';
 import MyProfilePage from './pages/MyProfilePage';
 import PublicProfilePage from './pages/PublicProfilePage';
+import MobilityAnalyticsPage from './pages/MobilityAnalyticsPage';
+import DemandDashboardPage from './pages/DemandDashboardPage';
 
 function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<HomePage />} />
+        <Route path="/" element={<HomeRoute />} />
         <Route path="/como-funciona" element={<HowItWorksPage />} />
         <Route path="/seguridad" element={<SecurityPage />} />
         <Route path="/preguntas-frecuentes" element={<FAQPage />} />
@@ -32,6 +34,8 @@ function App() {
         <Route path="/mis-viajes/:tripId" element={<TripDetailPage />} />
         <Route path="/perfil" element={<MyProfilePage />} />
         <Route path="/perfil/:userId" element={<PublicProfilePage />} />
+        <Route path="/analitica" element={<MobilityAnalyticsPage />} />
+        <Route path="/analitica/demanda" element={<DemandDashboardPage />} />
         <Route path="/registrar-auto" element={<CarRegistrationPage />} />
         <Route path="/test-supabase" element={<SupabaseTestPage />} />
         <Route path="/login" element={<LoginPage />} />

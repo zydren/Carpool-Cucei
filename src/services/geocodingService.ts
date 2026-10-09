@@ -100,6 +100,41 @@ export const getCoordinates = async (query: string): Promise<{
   };
 };
 
+/**
+ * Geocodificación inversa: a partir de un punto (lat, lng) obtiene la dirección
+ * más cercana usando Nominatim (mismo servicio y User-Agent que searchAddress).
+ * Nunca lanza: si falla o no hay dirección devuelve null, porque el punto sigue
+ * siendo válido con solo sus coordenadas.
+ */
+export const reverseGeocode = async (lat: number, lng: number): Promise<string | null> => {
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+    return null;
+  }
+
+  const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${encodeURIComponent(
+    lat
+  )}&lon=${encodeURIComponent(lng)}&zoom=18&addressdetails=1`;
+
+  try {
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'Carpool Universitario (carpool-universitario-app)', // Requerido por Nominatim
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Error en la petición a Nominatim: ${response.status}`);
+    }
+
+    const data: { display_name?: unknown } = await response.json();
+    const displayName = typeof data.display_name === 'string' ? data.display_name.trim() : '';
+    return displayName !== '' ? displayName : null;
+  } catch (error) {
+    console.error('Error en geocodificación inversa:', error);
+    return null;
+  }
+};
+
 /** Ubicación geocodificada reutilizable por los buscadores del proyecto. */
 export interface GeocodedLocation {
   lat: number;

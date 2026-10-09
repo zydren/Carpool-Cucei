@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import { ArrowLeft, Loader2, MapPin, Users } from 'lucide-react';
-import Navbar from '../components/Navbar';
-import Footer from '../components/Footer';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
+import { AppShell, PageHeader } from '../components/layout/AppShell';
+import { EmptyState, Alert } from '../components/ui/PageBlocks';
 import { ProfileHeader, StatsGrid, PublicCarCard, RatingsList } from '../components/ProfileCard';
 import { formatDate } from '../utils/profileFormat';
 import { getCurrentUser } from '../services/authService';
@@ -23,7 +23,7 @@ const PublicProfilePage = () => {
   const { userId } = useParams();
   const [state, setState] = useState<LoadState>({ status: 'loading' });
   const [profile, setProfile] = useState<PublicProfile | null>(null);
-  const [stats, setStats] = useState<UserTripStats>({ offeredTrips: 0, passengerTrips: 0 });
+  const [stats, setStats] = useState<UserTripStats>({ offeredTrips: 0, passengerTrips: 0, completedTrips: 0 });
   const [ratings, setRatings] = useState<ReceivedRating[]>([]);
   const [car, setCar] = useState<PublicCar | null>(null);
 
@@ -70,47 +70,50 @@ const PublicProfilePage = () => {
   }, [load]);
 
   const shell = (content: React.ReactNode) => (
-    <div className="min-h-screen bg-gray-50">
-      <Navbar />
-      <div className="pt-24 pb-16">
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
-          <Link to="/mis-viajes" className="inline-flex items-center gap-1.5 text-gray-600 hover:text-gray-700 text-sm mb-6">
+    <AppShell narrow>
+      <PageHeader
+        eyebrow="Perfil público"
+        title="Perfil del viajero"
+        description="Información pública, experiencia y calificaciones reales."
+        back={
+          <Link to="/mis-viajes" className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 hover:text-slate-900">
             <ArrowLeft className="w-4 h-4" aria-hidden="true" /> Volver a Mis Viajes
           </Link>
-          {content}
-        </div>
-      </div>
-      <Footer />
-    </div>
+        }
+      />
+      {content}
+    </AppShell>
   );
 
   if (state.status === 'loading') {
-    return shell(<p className="flex items-center gap-2 text-gray-600"><Loader2 className="w-5 h-5 animate-spin" aria-hidden="true" /> Cargando perfil...</p>);
+    return shell(<p className="flex items-center gap-2 text-slate-500"><Loader2 className="w-5 h-5 animate-spin" aria-hidden="true" /> Cargando perfil...</p>);
   }
   if (state.status === 'not-found') {
     return shell(
-      <Card className="p-12 text-center">
-        <Users className="w-12 h-12 mx-auto mb-3 text-gray-300" aria-hidden="true" />
-        <h2 className="text-xl font-semibold text-gray-900 mb-1">Usuario no encontrado</h2>
-        <p className="text-sm text-gray-600 mb-4">El perfil que buscas no existe o no está disponible.</p>
-        <Button variant="primary" onClick={() => navigate('/mis-viajes')}>Ir a Mis viajes</Button>
-      </Card>
+      <EmptyState
+        icon={Users}
+        title="Usuario no encontrado"
+        description="El perfil que buscas no existe o no está disponible."
+        actionLabel="Ir a Mis viajes"
+        actionTo="/mis-viajes"
+      />
     );
   }
   if (state.status === 'error' || !profile) {
     return shell(
-      <Card className="p-12 text-center bg-red-50">
-        <h3 className="text-xl font-semibold text-gray-900 mb-2">Ocurrió un error</h3>
-        <p className="text-gray-600 mb-4">{state.status === 'error' ? state.message : 'No se pudo cargar el perfil.'}</p>
-        <Button variant="primary" onClick={() => void load()}>Reintentar</Button>
+      <Card className="p-8 sm:p-10">
+        <Alert type="error">{state.status === 'error' ? state.message : 'No se pudo cargar el perfil.'}</Alert>
+        <div className="mt-5">
+          <Button variant="primary" onClick={() => void load()}>Reintentar</Button>
+        </div>
       </Card>
     );
   }
 
   return shell(
-    <Card className="p-6">
+    <Card className="p-6 sm:p-8 app-animate-fade-up">
       <ProfileHeader name={profile.full_name} university={profile.university} rating={profile.rating} totalRatings={profile.total_ratings} />
-      <p className="flex items-center gap-1.5 text-xs text-gray-500 mt-3">
+      <p className="flex items-center gap-1.5 text-xs text-slate-400 mt-4">
         <MapPin className="w-3.5 h-3.5 shrink-0" aria-hidden="true" /> Miembro desde {formatDate(profile.created_at)}
       </p>
       <StatsGrid stats={stats} />
