@@ -18,6 +18,7 @@ import MyProfilePage from './pages/MyProfilePage';
 import PublicProfilePage from './pages/PublicProfilePage';
 import MobilityAnalyticsPage from './pages/MobilityAnalyticsPage';
 import DemandDashboardPage from './pages/DemandDashboardPage';
+import ProtectedRoute from './components/ProtectedRoute';
 
 function App() {
   return (
@@ -28,15 +29,21 @@ function App() {
         <Route path="/seguridad" element={<SecurityPage />} />
         <Route path="/preguntas-frecuentes" element={<FAQPage />} />
         <Route path="/contacto" element={<ContactPage />} />
-        <Route path="/buscar-viaje" element={<SearchTripPage />} />
-        <Route path="/ofrecer-viaje" element={<OfferTripPage />} />
-        <Route path="/mis-viajes" element={<MyTripsPage />} />
-        <Route path="/mis-viajes/:tripId" element={<TripDetailPage />} />
-        <Route path="/perfil" element={<MyProfilePage />} />
+
+        {/* Rutas privadas: requieren sesión. Sin sesión -> /login (con destino). */}
+        <Route element={<ProtectedRoute />}>
+          <Route path="/buscar-viaje" element={<SearchTripPage />} />
+          <Route path="/ofrecer-viaje" element={<OfferTripPage />} />
+          <Route path="/mis-viajes" element={<MyTripsPage />} />
+          <Route path="/mis-viajes/:tripId" element={<TripDetailPage />} />
+          <Route path="/perfil" element={<MyProfilePage />} />
+          <Route path="/registrar-auto" element={<CarRegistrationPage />} />
+        </Route>
+
+        {/* Públicas (accesibles sin sesión) */}
         <Route path="/perfil/:userId" element={<PublicProfilePage />} />
         <Route path="/analitica" element={<MobilityAnalyticsPage />} />
         <Route path="/analitica/demanda" element={<DemandDashboardPage />} />
-        <Route path="/registrar-auto" element={<CarRegistrationPage />} />
         <Route path="/test-supabase" element={<SupabaseTestPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/registro" element={<RegisterPage />} />

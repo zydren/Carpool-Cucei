@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import Button from '../components/ui/Button';
 import { FormField } from '../components/ui/FormField';
 import Modal from '../components/ui/Modal';
@@ -9,6 +9,10 @@ import { login, resetPassword, type LoginParams } from '../services/authService'
 
 const LoginPage = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  // Destino original al que el usuario iba antes de ser enviado a /login
+  // (lo guarda ProtectedRoute en location.state.from). Si no existe, va a '/'.
+  const fromPathname = (location.state as { from?: string } | null)?.from ?? '/';
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -55,7 +59,7 @@ const LoginPage = () => {
       };
 
       await login(params);
-      navigate('/');
+      navigate(fromPathname, { replace: true });
     } catch (error: unknown) {
       console.error('Login error:', error);
       const message = error instanceof Error ? error.message : null;
