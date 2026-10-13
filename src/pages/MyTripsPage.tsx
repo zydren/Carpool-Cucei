@@ -57,11 +57,22 @@ import { getUserRatings } from '../services/profileService';
 import type { ReceivedRating } from '../services/profileService';
 import RatingModal from '../components/RatingModal';
 import Modal from '../components/ui/Modal';
+import TripAttendanceCard from '../components/TripAttendanceCard';
+import TripLiveTracking from '../components/TripLiveTracking';
 import {
   confirmTripCompletion,
   getMyTripCompletionConfirmations,
   reapMyTripCompletions,
 } from '../services/tripCompletionService';
+import {
+  ensureMyTripAttendanceRequests,
+  getMyTripAttendanceRequests,
+  hasAttendanceWindowOpened,
+} from '../services/tripAttendanceService';
+import type {
+  TripAttendanceByTrip,
+  TripAttendanceResponse,
+} from '../services/tripAttendanceService';
 
 /**
  * Mis Viajes (etapas 2 y 3 del ciclo de vida).
@@ -262,6 +273,8 @@ const MyTripsPage = () => {
   >({});
   // Etapa 2: mis confirmaciones de finalización (trip_id -> confirmed_at).
   const [myConfirmations, setMyConfirmations] = useState<Record<string, string>>({});
+  // Confirmación de asistencia (20 min antes): mis filas por viaje.
+  const [attendanceByTrip, setAttendanceByTrip] = useState<TripAttendanceByTrip>({});
   const [completionTarget, setCompletionTarget] = useState<CompletionTarget | null>(null);
   const [isConfirmingCompletion, setIsConfirmingCompletion] = useState(false);
   const [completionError, setCompletionError] = useState<string | null>(null);
@@ -324,6 +337,23 @@ const MyTripsPage = () => {
           myConfirmationsByTrip = {};
         }
 
+        // Confirmación de asistencia (20 minutos antes de la salida).
+        // 1) Se pide a la base de datos que genere las solicitudes pendientes
+        //    de mis viajes que ya están en ventana (respaldo del proceso
+        //    programado; idempotente).
+        // 2) Se leen MIS filas: la respuesta ya está persistida en Supabase.
+        let attendance: TripAttendanceByTrip = {};
+        try {
+          await ensureMyTripAttendanceRequests();
+          attendance = await getMyTripAttendanceRequests();
+        } catch (attendanceError) {
+          console.warn(
+            'No se pudieron cargar tus confirmaciones de asistencia:',
+            attendanceError
+          );
+          attendance = {};
+        }
+
         const ratedDriversByTrip: Record<string, boolean> = {};
         const myRatingsByTrip = indexRatingsByTrip(myRatings);
         for (const rating of myRatings) {
@@ -339,6 +369,7 @@ const MyTripsPage = () => {
         setMyRatingsByTrip(myRatingsByTrip);
         setReceivedRatingsByTrip(receivedRatingsByTrip);
         setMyConfirmations(myConfirmationsByTrip);
+        setAttendanceByTrip(attendance);
         setError(null);
       } catch (err) {
         console.error('Error cargando datos del conductor:', err);
@@ -592,6 +623,39 @@ const MyTripsPage = () => {
     }
   };
 
+  /**
+   * Confirmación de asistencia (20 minutos antes): la respuesta YA quedó
+   * guardada en Supabase (RPC respond_trip_attendance), aquí solo se refleja
+   * en la interfaz. NO cambia el estado del viaje, no libera asientos y no
+   * cancela solicitudes.
+   */
+  const handleAttendanceResponded = (
+    tripId: string,
+    response: TripAttendanceResponse
+  ) => {
+    setAttendanceByTrip((prev) => {
+      const current = prev[tripId];
+      if (!current) return prev;
+
+      return {
+        ...prev,
+        [tripId]: {
+          ...current,
+          response,
+          responded_at: new Date().toISOString(),
+        },
+      };
+    });
+
+    setNotice({
+      type: 'success',
+      text:
+        response === 'confirmed'
+          ? 'Confirmaste tu asistencia. ¡Nos vemos en el punto de salida!'
+          : 'Registramos que no podrás asistir. El viaje continúa y tu solicitud aceptada se mantiene.',
+    });
+  };
+
   // ============================================================
   // ETAPA 3: filtro activo + grupos «Próximos» / «Historial»
   // ============================================================
@@ -656,6 +720,18 @@ const MyTripsPage = () => {
   /** Pasajeros aceptados de un viaje (participantes reales del conductor). */
   const acceptedPassengersOf = (tripId: string) =>
     requests.filter((request) => request.trip_id === tripId && request.status === 'accepted');
+
+  /**
+   * Confirmación de asistencia (20 minutos antes) de un viaje, si debe
+   * mostrarse. Si ya respondí se muestra el resultado aunque la ventana haya
+   * cerrado; si sigo pendiente, la tarjeta aparece solo dentro de la ventana.
+   * La base de datos es la autoridad: esto evita ofrecer botones inútiles.
+   */
+  const attendanceToShow = (tripId: string, date: string, time: string) => {
+    const row = attendanceByTrip[tripId];
+    if (!row) return null;
+    return row.response !== 'pending' || hasAttendanceWindowOpened(date, time) ? row : null;
+  };
 
   /** Calificación que YO emití a una persona en un viaje (null si no existe). */
   const ratingGivenIn = (tripId: string, ratedId: string): number | null =>
@@ -1039,6 +1115,17 @@ const MyTripsPage = () => {
                         Muestra de solicitudes procesadas: se conservan para referencia.
                       </p>
                     )}
+
+                    {/* Confirmación de asistencia (20 minutos antes de la salida) */}
+                    <TripAttendanceCard
+                      tripId={trip.id}
+                      origin={trip.origin}
+                      destination={trip.destination}
+                      date={trip.date}
+                      time={trip.time}
+                      attendance={attendanceToShow(trip.id, trip.date, trip.time)}
+                      onResponded={handleAttendanceResponded}
+                    />
                   </Card>
                 );
               })}
@@ -1252,6 +1339,33 @@ const MyTripsPage = () => {
 
                     {request.status === 'accepted' && (
                       <div className="mt-4 pt-4 border-t border-slate-100 space-y-3">
+                        {/* Confirmación de asistencia (20 minutos antes de la salida) */}
+                        <TripAttendanceCard
+                          tripId={request.trip_id}
+                          origin={request.origin}
+                          destination={request.destination}
+                          date={request.date}
+                          time={request.time}
+                          attendance={attendanceToShow(
+                            request.trip_id,
+                            request.date,
+                            request.time
+                          )}
+                          onResponded={handleAttendanceResponded}
+                        />
+                        {/* Seguimiento GPS compartido (solo con el viaje en curso).
+                            El pasajero comparte su ubicación con consentimiento
+                            explícito y ve a los demás participantes del mismo viaje.
+                            isDriver=false: nunca inicia el viaje. Reutiliza el mismo
+                            componente y servicio que el conductor. */}
+                        {lifecycle === 'in_progress' && (
+                          <TripLiveTracking
+                            tripId={request.trip_id}
+                            isDriver={false}
+                            origin={request.origin}
+                            destination={request.destination}
+                          />
+                        )}
                         {/* Etapa 2: confirmación de finalización del viaje */}
                         {canConfirmCompletion && (
                           <div>

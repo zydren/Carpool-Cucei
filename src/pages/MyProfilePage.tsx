@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, Car as CarIcon, Loader2, Mail, Phone } from 'lucide-react';
+import {
+  ArrowLeft,
+  Car as CarIcon,
+  Loader2,
+  LocateFixed,
+  Mail,
+  Phone,
+} from 'lucide-react';
 
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
@@ -18,6 +25,7 @@ import {
 } from '../services/profileService';
 import type { FullProfile, ReceivedRating, UserTripStats } from '../services/profileService';
 import { getMyCars, type Car } from '../services/carService';
+import GpsTestPanel from '../components/GpsTestPanel';
 
 type LoadState = { status: 'loading' } | { status: 'error'; message: string } | { status: 'ready' };
 
@@ -34,6 +42,9 @@ const MyProfilePage = () => {
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [isSaving, setIsSaving] = useState(false);
   const [notice, setNotice] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  // Prueba de GPS: el panel se monta solo al pulsar el botón, así el watcher
+  // de geolocalización no se activa (ni pide permiso) sin que el usuario lo pida.
+  const [isGpsTestOpen, setIsGpsTestOpen] = useState(false);
 
   const load = useCallback(async () => {
     setState({ status: 'loading' });
@@ -182,6 +193,37 @@ const MyProfilePage = () => {
                 </li>
               ))}
             </ul>
+          )}
+        </div>
+        <div className="mt-8">
+          <h3 className="flex items-center gap-2 text-lg font-bold text-slate-900 mb-3">
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-900 text-white">
+              <LocateFixed className="w-4 h-4" aria-hidden="true" />
+            </span>
+            Ubicación
+          </h3>
+
+          {!isGpsTestOpen ? (
+            <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4 sm:p-5">
+              <p className="text-sm text-slate-500 mb-3">
+                Comprueba que el GPS de tu dispositivo funciona antes de compartir tu
+                ubicación durante un viaje.
+              </p>
+              <Button variant="secondary" size="sm" onClick={() => setIsGpsTestOpen(true)}>
+                <LocateFixed className="w-4 h-4" aria-hidden="true" /> Probar GPS
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <GpsTestPanel />
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsGpsTestOpen(false)}
+              >
+                Cerrar prueba de GPS
+              </Button>
+            </div>
           )}
         </div>
         <RatingsList ratings={ratings} />

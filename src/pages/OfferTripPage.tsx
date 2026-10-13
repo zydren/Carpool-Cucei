@@ -21,6 +21,7 @@ import {
 import type { LineStringGeometry } from '../services/routingService';
 import { createTrip, type CreateTripParams } from '../services/tripService';
 import { getMyCars } from '../services/carService';
+import { todayDateInputValue } from '../utils/dateTime';
 import LocationPickerMap, { type MapPick } from '../components/LocationPickerMap';
 import { Car, CheckCircle2, Clock, MapPin, Plus, Route as RouteIcon, Ruler, Sparkles, ThumbsUp, X } from 'lucide-react';
 
@@ -368,10 +369,13 @@ const OfferTripPage = () => {
     if (!formData.date) {
       newErrors.date = 'La fecha es requerida';
     } else {
-      const selectedDate = new Date(formData.date);
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      if (selectedDate < today) {
+      // Comparación de cadenas 'YYYY-MM-DD' (formato ISO: el orden
+      // lexicográfico coincide con el cronológico). NO se construye un Date a
+      // partir de la cadena: `new Date('2026-09-10')` se interpreta como
+      // MEDIANOCHE UTC y en México (UTC-6) cae a las 18:00 del día anterior,
+      // por lo que un viaje para HOY se rechazaba con «debe ser hoy o futura».
+      // `todayDateInputValue()` compone el día con los componentes LOCALES.
+      if (formData.date < todayDateInputValue()) {
         newErrors.date = 'La fecha debe ser hoy o futura';
       }
     }
@@ -864,6 +868,9 @@ const OfferTripPage = () => {
                           value={formData.date}
                           onChange={handleChange}
                           error={errors.date}
+                          // El selector no ofrece días anteriores a hoy (mismo
+                          // criterio local que la validación de más abajo).
+                          min={todayDateInputValue()}
                         />
                         <FormField
                           label="Hora"

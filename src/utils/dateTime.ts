@@ -41,6 +41,26 @@ const startOfLocalDay = (date: Date): number =>
   new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
 
 /**
+ * Fecha de HOY en formato 'YYYY-MM-DD' usando la hora LOCAL del dispositivo.
+ *
+ * Existe para validar formularios (por ejemplo «la fecha del viaje debe ser
+ * hoy o futura») comparando cadenas, sin construir objetos Date.
+ *
+ * NO uses `new Date().toISOString().slice(0, 10)`: eso devuelve el día en UTC
+ * y en México (UTC-6) daría el día siguiente durante las 6 primeras horas de
+ * la madrugada, o el anterior por la tarde-noche. Se compone con los
+ * componentes locales, igual que parseTripDateTime.
+ *
+ * @returns Cadena 'YYYY-MM-DD' (la que espera un `<input type="date">`).
+ */
+export const todayDateInputValue = (date: Date = new Date()): string => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+/**
  * Etiqueta corta del día del viaje: "Hoy", "Mañana" o "vie 26 sep".
  * @returns Cadena vacía si la fecha no es válida.
  */

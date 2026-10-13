@@ -1,3 +1,5 @@
+import { Link } from 'react-router-dom';
+
 const HeroSection = () => {
   return (
     <section className="relative overflow-hidden bg-slate-900 text-white pt-24 pb-16 md:pt-32 md:pb-24">
@@ -19,18 +21,18 @@ const HeroSection = () => {
             Ahorra, viaja seguro y llega a tiempo.
           </p>
           <div className="mt-8 flex flex-col sm:flex-row gap-3">
-            <a
-              href="/buscar-viaje"
+            <Link
+              to="/buscar-viaje"
               className="inline-flex items-center justify-center rounded-xl bg-white px-6 py-3 text-base font-semibold text-slate-950 hover:bg-teal-500 transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
             >
               Buscar viaje
-            </a>
-            <a
-              href="/ofrecer-viaje"
+            </Link>
+            <Link
+              to="/ofrecer-viaje"
               className="inline-flex items-center justify-center rounded-xl border border-white/25 px-6 py-3 text-base font-semibold text-white hover:bg-white/10 hover:border-teal-500 transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
             >
               Ofrecer viaje
-            </a>
+            </Link>
           </div>
           <dl className="mt-10 grid max-w-xl grid-cols-3 gap-6">
             <div>
