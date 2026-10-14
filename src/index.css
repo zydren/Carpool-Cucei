@@ -45,6 +45,24 @@ body {
   }
 }
 
+/* ---------------------------------------------------------------
+   Barra de navegación inferior (móvil)
+   Reserva espacio al final del documento para que la barra fija no
+   tape el último contenido (formularios, botones de envío, pies).
+   Solo en móvil (<768px), coincide con el punto de corte del menú
+   hamburguesa del Navbar. En escritorio no se aplica.
+   El selector :has() limita el reservado a las pantallas donde la
+   barra existe realmente (data-bottom-nav): así las pantallas de
+   autenticación, que la ocultan, no arrastran aire extra al final.
+   --------------------------------------------------------------- */
+@media (max-width: 767.98px) {
+  body:has([data-bottom-nav]) {
+    /* alto de la barra (~4rem) + margen de respiro + área segura */
+    padding-bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+
 /* Animaciones sutiles de UI */
 @keyframes app-fade-up {
   from {

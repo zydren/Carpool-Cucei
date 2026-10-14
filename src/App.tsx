@@ -19,6 +19,7 @@ import PublicProfilePage from './pages/PublicProfilePage';
 import MobilityAnalyticsPage from './pages/MobilityAnalyticsPage';
 import DemandDashboardPage from './pages/DemandDashboardPage';
 import ProtectedRoute from './components/ProtectedRoute';
+import BottomNav from './components/BottomNav';
 
 function App() {
   return (
@@ -50,6 +51,9 @@ function App() {
         <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
+      {/* Barra de navegación inferior (solo móvil, ver App.tsx). Es fija y la
+          heredan todas las rutas; en escritorio se oculta con `md:hidden`. */}
+      <BottomNav />
     </BrowserRouter>
   );
 }

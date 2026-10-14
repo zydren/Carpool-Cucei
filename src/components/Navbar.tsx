@@ -268,6 +268,31 @@ const Navbar = () => {
       {isMenuOpen && (
         <div className="md:hidden overflow-x-hidden bg-slate-900 border-t border-white/10">
           <div className="px-3 pt-3 pb-4 space-y-1.5 sm:px-3 max-w-full">
+            <Link
+              to="/buscar-viaje"
+              className="w-full text-left bg-white text-slate-950 hover:bg-teal-500 block px-4 py-3 rounded-xl text-base font-semibold"
+              onClick={() => setIsMenuOpen(false)}
+            >
+              Buscar viaje
+            </Link>
+            <Link
+              to="/ofrecer-viaje"
+              className="w-full text-left bg-transparent border border-white/30 text-white hover:bg-white/10 block px-4 py-3 rounded-xl text-base font-semibold"
+              onClick={() => setIsMenuOpen(false)}
+            >
+              Ofrecer viaje
+            </Link>
+            {user && (
+              <Link
+                to="/mis-viajes"
+                className={`w-full text-left block px-4 py-3 rounded-xl text-base font-medium ${
+                  isActive('/mis-viajes') ? 'text-slate-950 bg-teal-500' : 'text-slate-200 hover:text-white hover:bg-white/10'
+                }`}
+                onClick={() => setIsMenuOpen(false)}
+              >
+                Mis viajes
+              </Link>
+            )}
             <Link 
               to="/" 
               className={`block px-4 py-3 rounded-xl text-base font-medium ${
@@ -313,31 +338,6 @@ const Navbar = () => {
             >
               Contacto
             </Link>
-            <Link 
-              to="/buscar-viaje" 
-              className="w-full text-left bg-white text-slate-950 hover:bg-teal-500 block px-4 py-3 rounded-xl text-base font-semibold mt-2"
-              onClick={() => setIsMenuOpen(false)}
-            >
-              Buscar viaje
-            </Link>
-            <Link 
-              to="/ofrecer-viaje" 
-              className="w-full text-left bg-transparent border border-white/30 text-white hover:bg-white/10 block px-4 py-3 rounded-xl text-base font-semibold mt-2"
-              onClick={() => setIsMenuOpen(false)}
-            >
-              Ofrecer viaje
-            </Link>
-            {user && (
-              <Link 
-                to="/mis-viajes" 
-                className={`w-full text-left block px-4 py-3 rounded-xl text-base font-medium ${
-                  isActive('/mis-viajes') ? 'text-slate-950 bg-teal-500' : 'text-slate-200 hover:text-white hover:bg-white/10'
-                }`}
-                onClick={() => setIsMenuOpen(false)}
-              >
-                Mis viajes
-              </Link>
-            )}
             {user && (
               <Link
                 to="/registrar-auto"

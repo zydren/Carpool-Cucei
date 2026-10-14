@@ -159,6 +159,11 @@ const LoginPage = () => {
           onChange={handleChange}
           placeholder="tu.correo@alumnos.udg.mx"
           error={errors.email}
+          autoComplete="email"
+          inputMode="email"
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
         />
 
         <FormField
@@ -169,6 +174,7 @@ const LoginPage = () => {
           onChange={handleChange}
           placeholder="Tu contraseña"
           error={errors.password}
+          autoComplete="current-password"
         />
 
         <div className="mb-6 text-right">

@@ -658,7 +658,7 @@ const OfferTripPage = () => {
                       title="Ruta"
                       description="Visualiza tu trayecto hacia CUCEI y su distancia estimada."
                     >
-                      <div className="mb-4 h-80 sm:h-96 overflow-hidden rounded-2xl border border-slate-200">
+                      <div className="mb-4 h-64 sm:h-80 md:h-96 overflow-hidden rounded-2xl border border-slate-200">
                         <LocationPickerMap
                           centerLat={originPoint?.lat ?? CUCEI_COORDS.lat}
                           centerLng={originPoint?.lng ?? CUCEI_COORDS.lng}

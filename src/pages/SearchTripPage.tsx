@@ -853,7 +853,7 @@ const SearchTripPage = () => {
                   tripOrigins={tripOriginMarkers}
                   onTripOriginClick={handleTripOriginClick}
                   className="rounded-lg border border-slate-300"
-                  style={{ height: '280px', width: '100%' }}
+                  style={{ height: 'clamp(260px, 48vh, 360px)', width: '100%' }}
                 />
                 <p className="flex items-start gap-1.5 text-xs text-slate-500 mt-2">
                   <Info className="w-3.5 h-3.5 shrink-0 mt-0.5" aria-hidden="true" />
@@ -1031,7 +1031,7 @@ const SearchTripPage = () => {
                       tripOrigins={tripOriginMarkers}
                       onTripOriginClick={handleTripOriginClick}
                       className="rounded-lg border border-slate-300"
-                      style={{ height: '320px', width: '100%' }}
+                      style={{ height: 'clamp(280px, 52vh, 400px)', width: '100%' }}
                     />
                   ) : (
                     <p className="text-sm text-slate-500">

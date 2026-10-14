@@ -161,6 +161,8 @@ const RegisterPage = () => {
           onChange={handleChange}
           placeholder="Tu nombre completo"
           error={errors.fullName}
+          autoComplete="name"
+          autoCapitalize="words"
         />
 
         <FormField
@@ -171,6 +173,11 @@ const RegisterPage = () => {
           onChange={handleChange}
           placeholder="tu.correo@alumnos.udg.mx"
           error={errors.email}
+          autoComplete="email"
+          inputMode="email"
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
         />
 
         <FormField
@@ -181,6 +188,7 @@ const RegisterPage = () => {
           onChange={handleChange}
           placeholder="Mínimo 10 caracteres con mayúscula, minúscula, número y especial"
           error={errors.password}
+          autoComplete="new-password"
         />
 
         <FormField
@@ -191,6 +199,7 @@ const RegisterPage = () => {
           onChange={handleChange}
           placeholder="Repite tu contraseña"
           error={errors.confirmPassword}
+          autoComplete="new-password"
         />
 
         <FormField
@@ -201,6 +210,8 @@ const RegisterPage = () => {
           onChange={handleChange}
           placeholder="10 dígitos (ej: 3312345678)"
           error={errors.phone}
+          autoComplete="tel"
+          inputMode="tel"
         />
 
         <Button

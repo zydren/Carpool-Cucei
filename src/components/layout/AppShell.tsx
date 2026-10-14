@@ -13,8 +13,8 @@ export function AppShell({
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
       <Navbar />
-      <div className="pt-24 pb-16">
-        <div className={`mx-auto px-5 sm:px-6 lg:px-8 ${narrow ? 'max-w-3xl' : 'max-w-7xl'}`}>
+      <div className="pt-20 md:pt-24 pb-10 md:pb-16">
+        <div className={`mx-auto px-4 sm:px-6 lg:px-8 ${narrow ? 'max-w-3xl' : 'max-w-7xl'}`}>
           {children}
         </div>
       </div>
