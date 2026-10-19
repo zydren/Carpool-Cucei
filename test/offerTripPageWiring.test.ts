@@ -130,3 +130,84 @@ test('la página no llama calculateRouteThrough directamente (solo puntos de ent
     'La ruta con paradas se pide con buildWaypointRoute, que internamente usa calculateRouteThrough'
   );
 });
+
+// ============================================================
+// Etapa 4: indicador de proveedor y botón «Recalcular ruta
+// según fecha y hora»
+// ============================================================
+
+test('existe el botón «Recalcular ruta según fecha y hora» ligado a su handler', () => {
+  assert.match(source, /Recalcular ruta según fecha y hora/, 'falta el texto del botón');
+  const index = source.indexOf('Recalcular ruta según fecha y hora');
+  // El botón cercano debe usar el handler nuevo (no handleManualRecalculate).
+  const around = source.slice(Math.max(0, index - 600), index);
+  assert.match(around, /onClick=\{handleRecalculateByDepartAt\}/);
+  assert.match(around, /disabled=\{!originPoint \|\| isCalculatingRoute\}/,
+    'el botón debe deshabilitarse durante el cálculo (sin duplicados)');
+});
+
+test('handleRecalculateByDepartAt valida con buildDepartAt ANTES de recalcular', () => {
+  // Marker SIN la llave final: extractBraceBlock contaría desde el primer
+  // bloque interno (if) y cortaría antes de la llamada al servicio.
+  const fn = extractBraceBlock(source, 'const handleRecalculateByDepartAt = () =>');
+  // Guardia de duplicados durante la carga.
+  assert.match(fn, /!originPoint \|\| isCalculatingRoute/, 'falta la guardia de duplicados');
+  // Valida la hora con buildDepartAt leyendo la fecha/hora ACTUALES del formulario.
+  assert.match(fn, /buildDepartAt\(formData\.date,\s*formData\.time\)/,
+    'debe validar con buildDepartAt sobre formData actual');
+  // Rama de error: mensaje comprensible y NO se ejecuta el cálculo.
+  assert.match(fn, /if \(!departAt\) \{/, 'falta la validación de departAt');
+  assert.match(fn, /setRouteError\(/, 'debe notificar un error comprensible');
+  assert.match(fn, /return;/, 'debe salir sin recalcular si la hora es inválida');
+  // Rama válida: reutiliza el flujo existente con el token vigente.
+  assert.match(
+    fn,
+    /recalculateRoute\(originPoint\.lat,\s*originPoint\.lng,\s*originActionRef\.current\)/,
+    'debe reutilizar recalculateRoute con el token vigente'
+  );
+  // El return temprano debe ANTECEDER a la llamada: si la hora no vale, no hay cálculo.
+  const validation = fn.indexOf('if (!departAt)');
+  const call = fn.indexOf('recalculateRoute(');
+  assert.ok(validation !== -1 && call !== -1 && validation < call,
+    'la validación debe preceder a la llamada de recálculo');
+});
+
+test('el indicador muestra el proveedor del RESULTADO, no la bandera de entorno', () => {
+  assert.match(source, /routeResult\.provider === 'tomtom' \? 'TomTom' : 'OSRM'/,
+    'el indicador debe leer routeResult.provider');
+  assert.match(source, /Sistema de cálculo/, 'falta la etiqueta visible');
+  // No se consulta la bandera directamente en la página (evita mostrar
+  // «TomTom» cuando en realidad respondió OSRM por fallback).
+  const codeOnly = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+  assert.ok(
+    !codeOnly.includes('ROUTING_PROVIDER') && !codeOnly.includes('isTomTomEnabled'),
+    'la página no debe leer la bandera de proveedor: usa el resultado real'
+  );
+  assert.ok(!codeOnly.includes('import.meta.env'), 'la página no debe leer import.meta.env');
+});
+
+test('el fallback OSRM se explica al usuario cuando usedTomTomFallback es true', () => {
+  assert.match(
+    source,
+    /routeResult\.provider === 'osrm' && routeResult\.usedTomTomFallback/,
+    'la nota de respaldo debe condicionarse a un intento real fallido de TomTom'
+  );
+  assert.match(source, /OSRM se\s+utilizó como respaldo/);
+});
+
+test('la hora de salida del último cálculo se registra y se limpia al invalidar', () => {
+  // Acotado con marcadores: extractBraceBlock corta el try y no llegaría al
+  // catch, donde un cálculo fallido limpia la hora anterior.
+  const start = source.indexOf(RECALCULATE_ROUTE_MARKER);
+  assert.notEqual(start, -1, 'Falta recalculateRoute en OfferTripPage.tsx');
+  const end = source.indexOf('const handleManualRecalculate', start);
+  assert.notEqual(end, -1, 'No se encontró el límite posterior de recalculateRoute');
+  const recalc = source.slice(start, end);
+  assert.match(recalc, /setRouteDepartAtUsed\(departAt\)/,
+    'recalculateRoute debe registrar la hora usada al aplicar el resultado');
+  assert.match(recalc, /setRouteResult\(null\);\s*\n\s*setRouteDepartAtUsed\(null\)/,
+    'un cálculo fallido no debe conservar la hora anterior');
+  const invalidate = extractBraceBlock(source, 'const invalidateRouteForWaypointChange = () => {');
+  assert.match(invalidate, /setRouteDepartAtUsed\(null\)/,
+    'la invalidación (fecha, hora u origen) debe limpiar la hora mostrada');
+});

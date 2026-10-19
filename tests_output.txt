@@ -1,0 +1,50 @@
+﻿Γ£ö mapea distance desde summary.lengthInMeters (5.2191ms)
+Γ£ö usa la duraci├│n HIST├ôRICA (no travelTimeInSeconds ni noTraffic) (0.6171ms)
+Γ£ö convierte la geometr├¡a a LineString [lng, lat] y deduplica la uni├│n entre legs (2.862ms)
+Γ£ö descarta puntos con coordenadas no finitas (NaN/undefined) (1.4407ms)
+Γ£ö descarta puntos fuera de rango geogr├ífico (lat/lng inv├ílidos) (0.7763ms)
+Γ£ö elimina puntos consecutivos duplicados (sin segmentos de longitud cero) (0.5556ms)
+Γ£ö devuelve null si distance (lengthInMeters) es negativa (0.6509ms)
+Γ£ö devuelve null si la duraci├│n hist├│rica es negativa (3.1013ms)
+Γ£ö no modifica el objeto de entrada (1.1667ms)
+Γ£ö devuelve null si falta la duraci├│n hist├│rica (0.8688ms)
+Γ£ö devuelve null si la geometr├¡a tiene menos de 2 puntos v├ílidos (0.5972ms)
+Γ£ö devuelve null si no hay rutas (0.4179ms)
+Γ£ö devuelve null ante respuesta nula (defensa) (0.3865ms)
+Γ£ö responde 405 a m├⌐todos distintos de POST y no llama a TomTom (218.403ms)
+Γ£ö responde 500 si falta TOMTOM_API_KEY, sin llamar a TomTom (3.0177ms)
+Γ£ö responde 400 si el body no es JSON v├ílido (3.6958ms)
+Γ£ö responde 400 si el body carece de campos requeridos (5.723ms)
+Γ£ö responde 400 si una coordenada est├í fuera de rango (WGS84) (3.2631ms)
+Γ£ö responde 400 si se excede el l├¡mite de puntos (2.658ms)
+Γ£ö responde 400 si falta departAt (no se adivina la hora de salida) (2.3146ms)
+Γ£ö llama a TomTom con la URL correcta, orden lng,lat y par├ímetros exigidos (4.4305ms)
+Γ£ö devuelve 200 con RouteResult mapeado (distance, duration hist├│rica, geometry) (4.3576ms)
+Γ£ö devuelve 502 ante un error HTTP de TomTom (sin exponer detalles) (2.4326ms)
+Γ£ö devuelve 502 ante un error de red (fetch rechaza) (1.6262ms)
+Γ£ö devuelve 502 ante timeout del upstream (AbortError) (1.4716ms)
+Γ£ö devuelve 502 si TomTom responde con JSON inv├ílido (3.7943ms)
+Γ£ö ninguna respuesta ni registro expone la clave API (├⌐xito y todos los errores) (10.6065ms)
+Γ£ö devuelve 502 si falta la duraci├│n hist├│rica (no inventa duration) (1.8292ms)
+Γ£ö rechaza cuerpos que no son objetos JSON (3.8806ms)
+Γ£ö rechaza si falta el origen (1.2363ms)
+Γ£ö rechaza si falta el destino (0.7652ms)
+Γ£ö rechaza coordenadas fuera de rango geogr├ífico (WGS84) (7.994ms)
+Γ£ö rechaza coordenadas no finitas (NaN/Infinity) (58.7829ms)
+Γ£ö rechaza departAt ausente o vac├¡o (0.7664ms)
+Γ£ö rechaza waypoints que no sean puntos v├ílidos (1.0844ms)
+Γ£ö rechaza cuerpos con exceso de puntos (l├¡mite MAX_PROXY_POINTS) (29.5111ms)
+Γ£ö acepta un cuerpo v├ílido y normaliza los waypoints a [] si faltan (47.8751ms)
+Γ£ö construye la URL con el formato lng,lat y el orden origen:paradas:destino (11.4047ms)
+Γ£ö incluye los par├ímetros obligatorios: computeTravelTimeFor=all, departAt y la clave (1.1108ms)
+Γ£ö sin waypoints la ruta es solo origen:destino (1.926ms)
+Γ£ö codifica la clave en la query (caracteres especiales seguros) (6.5329ms)
+Γä╣ tests 41
+Γä╣ suites 0
+Γä╣ pass 41
+Γä╣ fail 0
+Γä╣ cancelled 0
+Γä╣ skipped 0
+Γä╣ todo 0
+Γä╣ duration_ms 888.0275
+EXIT=0

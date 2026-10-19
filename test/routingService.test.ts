@@ -148,6 +148,8 @@ test('calculateRoute sin departAt sigue usando OSRM (compatibilidad binaria)', a
       distance: 1500.4,
       duration: 320.2,
       geometry: osrmRoutePayload.routes[0].geometry,
+      provider: 'osrm',
+      usedTomTomFallback: false,
     });
     assert.equal(calls.length, 1);
     // OSRM sigue recibiendo coordenadas en orden lng,lat y sin cambios de URL.
@@ -208,7 +210,11 @@ test('fecha válida (buildDepartAt) llega intacta al proxy TomTom y se usa su re
       DESTINATION.lat,
       departAt
     );
-    assert.deepEqual(result, proxyRoutePayload);
+    assert.deepEqual(result, {
+      ...proxyRoutePayload,
+      provider: 'tomtom',
+      usedTomTomFallback: false,
+    });
     assert.equal(calls.length, 1); // TomTom resolvió la ruta: ni una petición a OSRM
     assert.equal(calls[0].url, '/api/route');
     assert.equal(calls[0].method, 'POST');
@@ -242,7 +248,11 @@ test('buildWaypointRoute optimiza el orden con matriz OSRM y envía paradas y de
         : jsonResponse(proxyRoutePayload),
     async (calls) => {
       const result = await buildWaypointRoute(ORIGIN, waypoints, DESTINATION, departAt);
-      assert.deepEqual(result.route, proxyRoutePayload);
+      assert.deepEqual(result.route, {
+        ...proxyRoutePayload,
+        provider: 'tomtom',
+        usedTomTomFallback: false,
+      });
       assert.deepEqual(result.order, [0, 1]);
       assert.equal(result.optimized, true);
       assert.equal(calls.length, 2);
@@ -262,7 +272,11 @@ test('buildWaypointRoute propaga departAt a la ruta final (1 parada, sin matriz)
   const departAt = buildDepartAt('2026-10-17', '09:00');
   await withHarness('tomtom', () => jsonResponse(proxyRoutePayload), async (calls) => {
     const result = await buildWaypointRoute(ORIGIN, [WAYPOINT], DESTINATION, departAt);
-    assert.deepEqual(result.route, proxyRoutePayload);
+    assert.deepEqual(result.route, {
+      ...proxyRoutePayload,
+      provider: 'tomtom',
+      usedTomTomFallback: false,
+    });
     assert.deepEqual(result.order, [0]);
     assert.equal(calls.length, 1);
     assert.equal(calls[0].url, '/api/route');
@@ -329,6 +343,9 @@ test('respaldo: error HTTP del proxy TomTom → la ruta la resuelve OSRM', async
         departAt
       );
       assert.equal(result.distance, 1500.4); // métricas de OSRM, jamás inventadas
+      // El proveedor REAL es OSRM y se explica que hubo intento fallido de TomTom.
+      assert.equal(result.provider, 'osrm');
+      assert.equal(result.usedTomTomFallback, true);
       assert.equal(calls.length, 2);
       assert.equal(calls[0].url, '/api/route');
       assert.equal(calls[1].url, OSRM_TWO_POINT_URL);
@@ -410,4 +427,137 @@ test('routingService reexporta buildDepartAt y TRIP_TIME_ZONE (fuente única)', 
   // Misma referencia que el helper original: no hay una segunda implementación.
   assert.equal(buildDepartAt, buildDepartAtOriginal);
   assert.equal(buildDepartAt('2026-10-15', '08:00'), '2026-10-15T08:00:00-06:00');
+});
+
+// ============================================================
+// 6. Proveedor real del resultado (campo `provider` para la UI)
+// ============================================================
+
+test('provider: TomTom resolvió → tomtom sin fallback', async () => {
+  const departAt = buildDepartAt('2026-10-15', '08:00');
+  await withHarness('tomtom', () => jsonResponse(proxyRoutePayload), async (calls) => {
+    const result = await calculateRoute(
+      ORIGIN.lng,
+      ORIGIN.lat,
+      DESTINATION.lng,
+      DESTINATION.lat,
+      departAt
+    );
+    assert.equal(result.provider, 'tomtom');
+    assert.equal(result.usedTomTomFallback, false);
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].url, '/api/route'); // jamás llegó a OSRM
+  });
+});
+
+test('provider: sin bandera TomTom → osrm sin fallback (nunca se intentó)', async () => {
+  await withHarness(null, () => jsonResponse(osrmRoutePayload), async (calls) => {
+    const result = await calculateRoute(
+      ORIGIN.lng,
+      ORIGIN.lat,
+      DESTINATION.lng,
+      DESTINATION.lat,
+      buildDepartAt('2026-10-15', '08:00')
+    );
+    assert.equal(result.provider, 'osrm');
+    assert.equal(result.usedTomTomFallback, false);
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].url, OSRM_TWO_POINT_URL);
+  });
+});
+
+test('provider: fallo de TomTom en calculateRouteThrough → osrm con fallback', async () => {
+  const departAt = buildDepartAt('2026-10-15', '08:00');
+  await withHarness(
+    'tomtom',
+    (call) =>
+      call.url === '/api/route'
+        ? jsonResponse({ error: 'El proveedor de rutas no está disponible.' }, 502)
+        : jsonResponse(osrmRoutePayload),
+    async (calls) => {
+      const result = await calculateRouteThrough(ORIGIN, [WAYPOINT], DESTINATION, departAt);
+      assert.equal(result.provider, 'osrm');
+      assert.equal(result.usedTomTomFallback, true);
+      assert.equal(calls.length, 2); // intento TomTom + respaldo OSRM
+    }
+  );
+});
+
+// ============================================================
+// 7. departAt distinto según hora o día elegidos en el formulario
+// ============================================================
+
+test('departAt cambia si cambia la HORA (mismo día): distinto tráfico enviado', async () => {
+  const early = buildDepartAt('2026-10-15', '08:00');
+  const late = buildDepartAt('2026-10-15', '08:30');
+  assert.notEqual(early, late, 'la hora debe reflejarse en departAt');
+  assert.equal(early, '2026-10-15T08:00:00-06:00');
+  assert.equal(late, '2026-10-15T08:30:00-06:00');
+
+  const departAt = late;
+  await withHarness('tomtom', () => jsonResponse(proxyRoutePayload), async (calls) => {
+    await calculateRoute(ORIGIN.lng, ORIGIN.lat, DESTINATION.lng, DESTINATION.lat, departAt);
+    const body = JSON.parse(calls[0].body ?? 'null');
+    assert.equal(body.departAt, '2026-10-15T08:30:00-06:00');
+    assert.notEqual(body.departAt, '2026-10-15T08:00:00-06:00');
+  });
+});
+
+test('departAt cambia si cambia el DÍA (misma hora): distinto tráfico enviado', async () => {
+  const dayOne = buildDepartAt('2026-10-15', '08:00');
+  const dayTwo = buildDepartAt('2026-10-16', '08:00');
+  assert.notEqual(dayOne, dayTwo, 'el día debe reflejarse en departAt');
+  assert.equal(dayOne, '2026-10-15T08:00:00-06:00');
+  assert.equal(dayTwo, '2026-10-16T08:00:00-06:00');
+
+  await withHarness('tomtom', () => jsonResponse(proxyRoutePayload), async (calls) => {
+    await calculateRoute(ORIGIN.lng, ORIGIN.lat, DESTINATION.lng, DESTINATION.lat, dayTwo);
+    const body = JSON.parse(calls[0].body ?? 'null');
+    assert.equal(body.departAt, '2026-10-16T08:00:00-06:00');
+    assert.notEqual(body.departAt, '2026-10-15T08:00:00-06:00');
+  });
+});
+
+test('fecha u hora inválidas del formulario → buildDepartAt devuelve null y NO se llama al proxy', async () => {
+  const invalidPairs: Array<[string, string]> = [
+    ['', ''], // formulario vacío
+    ['2026-02-30', '08:00'], // día inexistente
+    ['2026-10-15', ''], // sin hora
+    ['', '08:00'], // sin fecha
+    ['2026-10-15', '25:90'], // hora imposible
+    ['15/10/2026', '08:00'], // formato no RFC 3339
+  ];
+  for (const [date, time] of invalidPairs) {
+    const departAt = buildDepartAt(date, time);
+    assert.equal(departAt, null, `(${date}, ${time}) debe producir null`);
+  }
+
+  // Incluso con la bandera TomTom activa, un null no dispara el proxy.
+  await withHarness('tomtom', () => jsonResponse(osrmRoutePayload), async (calls) => {
+    const result = await calculateRoute(
+      ORIGIN.lng,
+      ORIGIN.lat,
+      DESTINATION.lng,
+      DESTINATION.lat,
+      null
+    );
+    assert.equal(result.provider, 'osrm');
+    assert.equal(result.usedTomTomFallback, false);
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].url, OSRM_TWO_POINT_URL);
+  });
+});
+
+test('si TomTom falla y OSRM también, el error se propaga (no se inventa resultado)', async () => {
+  const departAt = buildDepartAt('2026-10-15', '08:00');
+  await withHarness('tomtom', (call) => {
+    if (call.url === '/api/route') {
+      return jsonResponse({ error: 'El proveedor de rutas no está disponible.' }, 502);
+    }
+    return new Response('caído', { status: 503 });
+  }, async () => {
+    await assert.rejects(
+      calculateRoute(ORIGIN.lng, ORIGIN.lat, DESTINATION.lng, DESTINATION.lat, departAt)
+    );
+  });
 });
