@@ -11,7 +11,10 @@
  * ni se sustituye OSRM.
  */
 
-import type { RoutePoint } from './routingService';
+// Extensión `.ts` explícita: requisito de moduleResolution nodenext y del
+// sistema de módulos real (package.json "type": "module"). Import SOLO de
+// tipos: se elimina en runtime, sin cambio de comportamiento.
+import type { RoutePoint } from './routingService.ts';
 
 /** Base de la API de rutas de TomTom (v1). */
 export const TOMTOM_ROUTE_BASE_URL =
