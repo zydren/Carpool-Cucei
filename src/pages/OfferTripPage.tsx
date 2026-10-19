@@ -16,7 +16,7 @@ import {
   formatDistance,
   formatDuration,
   MAX_WAYPOINTS,
-  type RouteResult,
+  type RouteCalculation,
   type StoredRouteWaypoint,
 } from '../services/routingService';
 import type { LineStringGeometry } from '../services/routingService';
@@ -65,8 +65,12 @@ const OfferTripPage = () => {
   const [addressResults, setAddressResults] = useState<GeocodingResult[]>([]);
   const [selectedOrigin, setSelectedOrigin] = useState<GeocodingResult | null>(null);
   const [isCalculatingRoute, setIsCalculatingRoute] = useState(false);
-  const [routeResult, setRouteResult] = useState<RouteResult | null>(null);
+  const [routeResult, setRouteResult] = useState<RouteCalculation | null>(null);
   const [routeError, setRouteError] = useState<string | null>(null);
+  /** Hora de salida (departAt, RFC 3339) usada en el ÚLTIMO cálculo aplicado.
+      Se limpia junto con la ruta para no mostrar una hora que ya no
+      corresponde al resultado en pantalla. */
+  const [routeDepartAtUsed, setRouteDepartAtUsed] = useState<string | null>(null);
 
   // Selección directa del origen en el mapa (mismo patrón que SearchTripPage)
   const [mapPick, setMapPick] = useState<MapPick | null>(null);
@@ -153,6 +157,7 @@ const OfferTripPage = () => {
     setIsReverseGeocoding(false);
     setIsCalculatingRoute(false);
     setRouteResult(null);
+    setRouteDepartAtUsed(null);
     setRouteError(null);
 
     try {
@@ -201,6 +206,7 @@ const OfferTripPage = () => {
           // el orden habilitado por el cálculo.
           setWaypoints(result.order.map((index) => waypoints[index]));
           setRouteResult(route);
+          setRouteDepartAtUsed(departAt);
           setRouteError(null);
           setOrderOptimizationSkipped(skipped);
         }
@@ -209,6 +215,7 @@ const OfferTripPage = () => {
       const route = await calculateRoute(lng, lat, CUCEI_COORDS.lng, CUCEI_COORDS.lat, departAt);
       if (!isStale()) {
         setRouteResult(route);
+        setRouteDepartAtUsed(departAt);
         setRouteError(null);
         setOrderOptimizationSkipped(false);
       }
@@ -219,6 +226,7 @@ const OfferTripPage = () => {
           ? 'No pudimos calcular una ruta que pase por todos los puntos de paso hasta CUCEI. Revisa las coordenadas e inténtalo de nuevo.'
           : 'No pudimos calcular una ruta desde esa ubicación hasta CUCEI. Selecciona otra dirección.');
         setRouteResult(null);
+        setRouteDepartAtUsed(null);
       }
     } finally {
       if (!isStale()) {
@@ -253,6 +261,7 @@ const OfferTripPage = () => {
     originActionRef.current += 1; // descarta respuestas de cálculos en curso
     setIsCalculatingRoute(false);
     setRouteResult(null);
+    setRouteDepartAtUsed(null);
     setRouteError(null);
     setOrderOptimizationSkipped(false);
   };
@@ -330,6 +339,26 @@ const OfferTripPage = () => {
     void recalculateRoute(originPoint.lat, originPoint.lng, originActionRef.current);
   };
 
+  /** Recalcula la ruta usando la fecha y hora ACTUALES del formulario.
+      Valida ambos valores con `buildDepartAt` antes de llamar al servicio:
+      si son inválidos muestra un mensaje y no se ejecuta ningún cálculo
+      (la hora nunca se adivina). El guardia `isCalculatingRoute` bloquea
+      peticiones duplicadas mientras hay un cálculo en vuelo; el botón además
+      queda deshabilitado en ese estado. */
+  const handleRecalculateByDepartAt = () => {
+    if (!originPoint || isCalculatingRoute) return;
+    const departAt = buildDepartAt(formData.date, formData.time);
+    if (!departAt) {
+      setRouteError(
+        'Selecciona una fecha y una hora válidas en el formulario para poder recalcular la ruta según la hora de salida.'
+      );
+      return;
+    }
+    // recalculateRoute relee formData en el cierre actual: compone el mismo
+    // departAt y reutiliza el flujo existente (TomTom con respaldo en OSRM).
+    void recalculateRoute(originPoint.lat, originPoint.lng, originActionRef.current);
+  };
+
   // --------------------------------- JSX ----------------------------------
 
   // Texto del mapa indicando cómo interactuar según el modo activo.
@@ -353,6 +382,7 @@ const OfferTripPage = () => {
     setAddressResults([]);
     setAddressQuery('');
     setRouteResult(null);
+    setRouteDepartAtUsed(null);
     setRouteError(null);
     setErrors((prev) => ({ ...prev, origin: '' }));
 
@@ -480,6 +510,7 @@ const OfferTripPage = () => {
       setMapPickAddress(null);
       setIsReverseGeocoding(false);
       setRouteResult(null);
+      setRouteDepartAtUsed(null);
       setWaypoints([]);
       setIsWaypointMode(false);
       setOrderOptimizationSkipped(false);
@@ -805,6 +836,22 @@ const OfferTripPage = () => {
                         </Button>
                       )}
 
+                      {/* Recálculo explícito según la fecha y hora ACTUALES
+                          del formulario: valida antes de llamar al servicio y
+                          reutiliza el mismo flujo (TomTom con respaldo OSRM). */}
+                      {(originPoint || waypoints.length > 0) && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="secondary"
+                          onClick={handleRecalculateByDepartAt}
+                          disabled={!originPoint || isCalculatingRoute}
+                        >
+                          <Clock className="h-4 w-4" aria-hidden="true" />
+                          Recalcular ruta según fecha y hora
+                        </Button>
+                      )}
+
                       {originPoint ? (
                         <div>
                           {isCalculatingRoute && (
@@ -835,6 +882,30 @@ const OfferTripPage = () => {
                                     {formatDuration(routeResult.duration)}
                                   </p>
                                 </div>
+                              </div>
+                              {/* Procedencia del resultado: se lee del cálculo
+                                  aplicado (routeResult), nunca de la bandera
+                                  de entorno, para mostrar SIEMPRE el
+                                  proveedor que produjo estos datos. */}
+                              <div className="mt-4 space-y-1 rounded-xl border border-teal-500/20 bg-teal-500/5 p-3">
+                                <p className="flex items-center gap-2 text-sm font-semibold text-navy-950">
+                                  <RouteIcon className="h-4 w-4 shrink-0 text-teal-700" aria-hidden="true" />
+                                  Sistema de cálculo:{' '}
+                                  {routeResult.provider === 'tomtom' ? 'TomTom' : 'OSRM'}
+                                </p>
+                                {routeResult.provider === 'osrm' && routeResult.usedTomTomFallback && (
+                                  <p className="text-xs text-amber-700">
+                                    TomTom no devolvió una ruta utilizable; OSRM se
+                                    utilizó como respaldo.
+                                  </p>
+                                )}
+                                <p className="text-xs text-slate-600">
+                                  <Clock className="h-3.5 w-3.5 inline mr-1" aria-hidden="true" />
+                                  Salida considerada:{' '}
+                                  {routeDepartAtUsed
+                                    ? `${routeDepartAtUsed} (America/Mexico_City)`
+                                    : 'sin fecha u hora válidas; la ruta no contempla el tráfico por horario'}
+                                </p>
                               </div>
                               {waypoints.length >= 2 && orderOptimizationSkipped && (
                                 <p className="text-xs text-amber-700">

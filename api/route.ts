@@ -75,7 +75,13 @@ export const handler = async (request: Request): Promise<Response> => {
   }
 
   const parsed = parseRouteProxyRequest(rawBody);
-  if (!parsed.ok) {
+  // Narrowing explícito del discriminante (`=== false`): `!parsed.ok` no
+  // estrecha la unión cuando la verificación se hace con strictNullChecks
+  // desactivado (comportamiento del compilador de funciones de Vercel),
+  // lo que provocaba TS2339 sobre `parsed.error`. Con `=== false` el estrecho
+  // es correcto en ambos modos (estricto y no estricto), sin `any` y sin
+  // perder la validación del cuerpo.
+  if (parsed.ok === false) {
     return jsonResponse(400, { error: parsed.error });
   }
 

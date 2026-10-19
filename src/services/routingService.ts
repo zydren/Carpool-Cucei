@@ -26,6 +26,24 @@ export interface RouteResult {
   geometry: LineStringGeometry;
 }
 
+/** Proveedor que produjo REALMENTE un resultado de ruta. */
+export type RouteProvider = 'tomtom' | 'osrm';
+
+/**
+ * Resultado de un cálculo con metadatos de procedencia para la interfaz:
+ * - `provider` es el proveedor que produjo el resultado, NO el configurado:
+ *   'tomtom' solo cuando el proxy devolvió una ruta válida; 'osrm' cuando
+ *   OSRM resolvió la ruta (directamente o como respaldo tras un fallo de
+ *   TomTom).
+ * - `usedTomTomFallback` es true SOLO cuando TomTom estaba habilitado y se
+ *   intentó pero falló, y OSRM respondió como respaldo. Permite a la UI
+ *   explicar el fallback sin confundirlo con el uso directo de OSRM.
+ */
+export interface RouteCalculation extends RouteResult {
+  provider: RouteProvider;
+  usedTomTomFallback: boolean;
+}
+
 export interface LineStringGeometry {
   type: 'LineString';
   coordinates: [number, number][]; // [longitude, latitude]
@@ -253,9 +271,12 @@ export const calculateRoute = async (
   destLon: number,
   destLat: number,
   departAt?: string | null
-): Promise<RouteResult> => {
+): Promise<RouteCalculation> => {
   const resolvedDepartAt = resolveDepartAt(departAt);
-  if (resolvedDepartAt && isTomTomEnabled()) {
+  // Solo se intenta TomTom con bandera explícita Y hora válida; ese intento se
+  // registra para poder explicar en la UI si el respaldo OSRM fue fallback.
+  const tomTomAttempted = resolvedDepartAt !== null && isTomTomEnabled();
+  if (tomTomAttempted && resolvedDepartAt) {
     const tomTomRoute = await fetchTomTomRoute(
       { lat: originLat, lng: originLon },
       [],
@@ -263,12 +284,14 @@ export const calculateRoute = async (
       resolvedDepartAt
     );
     if (tomTomRoute) {
-      return tomTomRoute;
+      // provider = proveedor REAL del resultado, no el configurado.
+      return { ...tomTomRoute, provider: 'tomtom', usedTomTomFallback: false };
     }
     console.warn('TomTom no devolvió una ruta utilizable; se usa OSRM como respaldo.');
   }
   const url = `https://router.project-osrm.org/route/v1/driving/${originLon},${originLat};${destLon},${destLat}?overview=full&geometries=geojson`;
-  return fetchOsrmRoute(url);
+  const route = await fetchOsrmRoute(url);
+  return { ...route, provider: 'osrm', usedTomTomFallback: tomTomAttempted };
 };
 
 /**
@@ -336,17 +359,19 @@ export const calculateRouteThrough = async (
   waypoints: RoutePoint[],
   destination: RoutePoint,
   departAt?: string | null
-): Promise<RouteResult> => {
+): Promise<RouteCalculation> => {
   // Con ROUTING_PROVIDER='tomtom' (alias heredado: VITE_ROUTING_PROVIDER) y
   // una hora de salida RFC 3339 válida se
   // intenta primero el proxy TomTom (paradas incluidas). Sin hora válida, o si
   // TomTom falla, se conserva el flujo OSRM multipunto de una sola petición
   // descrito arriba (el error de OSRM se propaga igual que siempre).
   const resolvedDepartAt = resolveDepartAt(departAt);
-  if (resolvedDepartAt && isTomTomEnabled()) {
+  const tomTomAttempted = resolvedDepartAt !== null && isTomTomEnabled();
+  if (tomTomAttempted && resolvedDepartAt) {
     const tomTomRoute = await fetchTomTomRoute(origin, waypoints, destination, resolvedDepartAt);
     if (tomTomRoute) {
-      return tomTomRoute;
+      // provider = proveedor REAL del resultado, no el configurado.
+      return { ...tomTomRoute, provider: 'tomtom', usedTomTomFallback: false };
     }
     console.warn('TomTom no devolvió una ruta utilizable; se usa OSRM como respaldo.');
   }
@@ -368,6 +393,8 @@ export const calculateRouteThrough = async (
     distance: route.distance,
     duration: route.duration,
     geometry: route.geometry,
+    provider: 'osrm',
+    usedTomTomFallback: tomTomAttempted,
   };
 };
 
@@ -542,7 +569,7 @@ export const buildWaypointRoute = async (
   waypoints: RoutePoint[],
   destination: RoutePoint,
   departAt?: string | null
-): Promise<WaypointOrderResult & { route: RouteResult }> => {
+): Promise<WaypointOrderResult & { route: RouteCalculation }> => {
   const { order, optimized } = await optimizeWaypointOrder(origin, waypoints, destination);
   const orderedWaypoints = order.map((index) => waypoints[index]);
   // La matriz de tiempos sigue siendo exclusiva de OSRM; `departAt` solo

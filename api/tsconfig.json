@@ -1,0 +1,34 @@
+{
+  // Type-check del endpoint serverless, tal como lo compila @vercel/node.
+  //
+  // Contexto (verificado en packages/node/src/typescript.ts de @vercel/node):
+  // - findConfigFile() sube desde el directorio de la función hasta dar con un
+  //   tsconfig.json; por eso vive en api/ y no en la raíz (la raíz es una
+  //   configuración de solución para `tsc -b` del frontend, sin compilerOptions).
+  // - fixConfig() inyecta module/moduleResolution NodeNext y strict:false SOLO
+  //   cuando `module` no está definido; aquí se fija explícito para que el
+  //   chequeo use el sistema de módulos real (package.json "type": "module",
+  //   runtime Node de Vercel) y modo estricto.
+  // - El runtime de compilación fuerza noEmit:false (TS_NODE_COMPILER_OPTIONS),
+  //   por lo que NO se usa allowImportingTsExtensions (chocaría con TS5096);
+  //   se usa rewriteRelativeImportExtensions, compatible con emit, que sí
+  //   admite importaciones relativas terminadas en `.ts` (las exige Node ESM
+  //   con type stripping, que ejecuta api/route.ts tal cual).
+  // - `types` incluye node (process.env solo en el servidor; ningún secreto se
+  //   versiona ni se inlinea en el bundle) y vite/client (import.meta.env,
+  //   leído opcionalmente en routingService).
+  "compilerOptions": {
+    "target": "es2023",
+    "lib": ["ES2023", "DOM"],
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "types": ["node", "vite/client"],
+    "strict": true,
+    "esModuleInterop": true,
+    "moduleDetection": "force",
+    "rewriteRelativeImportExtensions": true,
+    "noEmit": true,
+    "skipLibCheck": true
+  },
+  "include": ["./*.ts"]
+}

@@ -20,7 +20,11 @@
  *   { distance (m), duration (s), geometry: LineString { coordinates: [lng, lat] } }
  */
 
-import type { LineStringGeometry, RouteResult } from './routingService';
+// La extensión `.ts` es obligatoria bajo moduleResolution nodenext (que es
+// además el sistema de módulos real del proyecto: package.json "type":
+// "module" + Node ESM). Es un import SOLO de tipos: se elimina en runtime
+// (type stripping / type erasure), por lo que no cambia ningún comportamiento.
+import type { LineStringGeometry, RouteResult } from './routingService.ts';
 
 /** Forma mínima de un punto de geometría de TomTom. */
 interface TomTomPoint {
