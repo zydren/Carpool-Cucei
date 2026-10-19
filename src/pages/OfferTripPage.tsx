@@ -10,6 +10,7 @@ import { PageHeader } from '../components/layout/AppShell';
 import { getCurrentUser } from '../services/authService';
 import { searchAddress, reverseGeocode, type GeocodingResult } from '../services/geocodingService';
 import {
+  buildDepartAt,
   calculateRoute,
   buildWaypointRoute,
   formatDistance,
@@ -167,20 +168,32 @@ const OfferTripPage = () => {
   };
 
   /**
-   * Recalcula la ruta OSRM desde un punto hasta CUCEI. Es exactamente el
-   * flujo que ya usaba la selección por texto; ahora también lo utiliza el
-   * clic en el mapa. `token` (cuando se pasa) evita que una respuesta vieja
-   * sobrescriba la ruta de una selección más reciente.
+   * Recalcula la ruta desde un punto hasta CUCEI usando el servicio con
+   * despacho de proveedores (TomTom con respaldo en OSRM, o solo OSRM según
+   * la bandera del entorno). Es exactamente el flujo que ya usaba la
+   * selección por texto; ahora también lo utiliza el clic en el mapa.
+   * `token` (cuando se pasa) evita que una respuesta vieja sobrescriba la
+   * ruta de una selección más reciente.
+   *
+   * `departAt` (hora de salida compuesta con `buildDepartAt`) se deriva de
+   * la fecha y hora ACTUALES del formulario en el momento de la llamada.
+   * Si fecha u hora son inválidas `buildDepartAt` devuelve null y el
+   * servicio usa OSRM sin inventar una hora de salida.
    */
   const recalculateRoute = async (lat: number, lng: number, token?: number) => {
     const isStale = () => token !== undefined && token !== originActionRef.current;
+    // Hora de salida para el despacho de proveedores. buildDepartAt valida
+    // estrictamente date/time (formato local del formulario) y devuelve null
+    // ante cualquier valor inválido: nunca se lee el reloj del dispositivo
+    // ni se fabrica un offset como sustituto.
+    const departAt = buildDepartAt(formData.date, formData.time);
     setIsCalculatingRoute(true);
     try {
       const origin = { lat, lng };
       // Con puntos de paso, la ruta OSRM debe pasar por todos ellos y
       // terminar en CUCEI. El orden puede ser optimizado por el servicio.
       if (waypoints.length > 0) {
-        const result = await buildWaypointRoute(origin, waypoints, CUCEI_COORDS);
+        const result = await buildWaypointRoute(origin, waypoints, CUCEI_COORDS, departAt);
         const route = result.route;
         const skipped = !result.optimized && waypoints.length >= 2;
         if (!isStale()) {
@@ -193,7 +206,7 @@ const OfferTripPage = () => {
         }
         return;
       }
-      const route = await calculateRoute(lng, lat, CUCEI_COORDS.lng, CUCEI_COORDS.lat);
+      const route = await calculateRoute(lng, lat, CUCEI_COORDS.lng, CUCEI_COORDS.lat, departAt);
       if (!isStale()) {
         setRouteResult(route);
         setRouteError(null);
@@ -230,8 +243,12 @@ const OfferTripPage = () => {
     await recalculateRoute(parseFloat(result.lat), parseFloat(result.lon), action);
   };
 
-  /** Invalida ruta y cálculos en curso. Todo lo que depende de la ruta se vuelve
-      `null` para que el usuario lo recalcule desde una nueva acción. */
+  /** Invalida la ruta y los cálculos en curso. Se usa al cambiar los puntos
+      de paso y también al cambiar la fecha o la hora del viaje, porque la
+      ruta depende de `departAt` (hora de salida): un resultado calculado
+      para una fecha u hora anteriores no puede confirmarse como si
+      correspondiera a los nuevos valores. Todo lo que depende de la ruta se
+      vuelve `null` para que el usuario lo recalcule desde una nueva acción. */
   const invalidateRouteForWaypointChange = () => {
     originActionRef.current += 1; // descarta respuestas de cálculos en curso
     setIsCalculatingRoute(false);
@@ -303,10 +320,14 @@ const OfferTripPage = () => {
     setWaypointNotice(null);
   };
 
-  /** Pídele al servicio que recalcule la ruta con los puntos de paso actuales. */
+  /** Pídele al servicio que recalcule la ruta con los puntos de paso
+      actuales y la fecha/hora vigentes. Pasa el token vigente para que una
+      invalidación posterior (p. ej. cambiar la fecha) descarte este
+      cálculo: sin token, `recalculateRoute` aplicaría la respuesta sin
+      comprobar su antigüedad. */
   const handleManualRecalculate = () => {
     if (!originPoint || isCalculatingRoute) return;
-    void recalculateRoute(originPoint.lat, originPoint.lng);
+    void recalculateRoute(originPoint.lat, originPoint.lng, originActionRef.current);
   };
 
   // --------------------------------- JSX ----------------------------------
@@ -480,6 +501,13 @@ const OfferTripPage = () => {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
+    // La ruta depende de la hora de salida (`departAt`): cambiar la fecha o
+    // la hora invalida el resultado anterior. El mismo mecanismo (token +
+    // limpieza de estado) descarta también los cálculos asíncronos todavía
+    // en vuelo, que no pueden sobrescribir un resultado más reciente.
+    if (name === 'date' || name === 'time') {
+      invalidateRouteForWaypointChange();
+    }
     if (errors[name]) {
       setErrors(prev => ({ ...prev, [name]: '' }));
     }
@@ -761,7 +789,10 @@ const OfferTripPage = () => {
                         </ul>
                       )}
 
-                      {waypoints.length > 0 && (
+                      {/* Visible también sin puntos de paso: tras cambiar la
+                          fecha u hora la ruta se invalida y el usuario debe
+                          poder recalcularla sin tener que reelegir el origen. */}
+                      {(originPoint || waypoints.length > 0) && (
                         <Button
                           type="button"
                           size="sm"
